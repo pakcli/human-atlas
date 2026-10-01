@@ -12,6 +12,8 @@ import AnatomyScene from './scene';
 import {DEFAULT_VISIBLE,SYSTEMS,type AnatomySex,type Atlas,type Concept,type SceneState,type SystemId,type View} from './anatomy';
 import {getVennClassification,getHomology,getStandardizedDescription} from './anatomy-dictionary';
 
+import { ModelTuner } from './model-tuner';
+
 const initial:SceneState={explode:0,visible:DEFAULT_VISIBLE,selected:[],isolate:false,view:'three-quarter',rotate:false,reset:0};
 
 export default function Home(){
@@ -142,6 +144,22 @@ export default function Home(){
 
  return <main className="studio">
   {atlas&&<AnatomyScene atlas={atlas} state={{...state,inspectorOpen:details&&selectedParts.length>0}} onSelect={choosePart} onProgress={n=>{setProgress(n);if(n===100)setError('');}} onError={setError}/>}
+  <ModelTuner
+   sex={sex}
+   onIsolateBones={()=>{
+    setState(s=>({...s,visible:['skeletal','reproductive'],isolate:false}));
+   }}
+   onToggleSkin={()=>{
+    setState(s=>{
+     const hasSkin=s.visible.includes('integumentary');
+     return {...s,visible:hasSkin?s.visible.filter(id=>id!=='integumentary'):[...s.visible,'integumentary']};
+    });
+   }}
+   onAutoSelectVagina={()=>{
+    if(sex!=='female')setSex('female');
+    choosePart('VH_F_vagina');
+   }}
+  />
   <div className="vignette"/>
 
   <header className="identity">

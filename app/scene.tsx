@@ -47,7 +47,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
    return best;
   };
   const materialFor=(system:string)=>{
-   const m=new T.MeshStandardMaterial({color:SYSTEMS.find(s=>s.id===system)?.color??'#aebbb8',metalness:.08,roughness:.53,side:T.DoubleSide,transparent:system==='integumentary',opacity:system==='integumentary'?.1:1,depthWrite:system!=='integumentary'});
+   const m=new T.MeshStandardMaterial({color:SYSTEMS.find(s=>s.id===system)?.color??'#aebbb8',metalness:.08,roughness:.53,side:T.DoubleSide,transparent:system==='integumentary',opacity:system==='integumentary'?.75:1,depthWrite:true});
    m.onBeforeCompile=shader=>{
     shader.uniforms.partState={value:partTexture};shader.uniforms.selectionState={value:selectionTexture};shader.uniforms.stateWidth={value:width};
     shader.vertexShader='attribute float partIndex; uniform sampler2D partState; uniform sampler2D selectionState; uniform float stateWidth; varying float partVisible; varying float partSelected;\n'+shader.vertexShader;
@@ -58,6 +58,35 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
    };materials.push(m);return m;
   };
   const mats=new Map(SYSTEMS.map(s=>[s.id,materialFor(s.id)]));
+  // --- Sketchfab female reproductive cross-section texture ---
+  // glTF UVs: V=0 at top. flipY=false keeps them compatible with WebGL without double-flip.
+  // emissiveMap is added because in this Three.js build map_fragment runs BEFORE color_fragment
+  // (line 86 vs 87 in the compiled frag shader), so the texture written in map_fragment would
+  // be overwritten by our color_fragment injection. emissiveMap bypasses that pipeline.
+  const texLoader=new T.TextureLoader();
+  const uterusTex=texLoader.load('/models/textures/uterus_xsection.jpg',()=>{dirty=true;});
+  uterusTex.colorSpace=T.SRGBColorSpace;
+  uterusTex.flipY=false;
+  const chunk10Material=new T.MeshStandardMaterial({
+   map:uterusTex,
+   emissiveMap:uterusTex,
+   emissive:new T.Color(.38,.26,.22),
+   roughness:.62,
+   metalness:.03,
+   side:T.DoubleSide,
+  });
+  chunk10Material.onBeforeCompile=shader=>{
+   shader.uniforms.partState={value:partTexture};shader.uniforms.selectionState={value:selectionTexture};shader.uniforms.stateWidth={value:width};
+   shader.vertexShader='attribute float partIndex; uniform sampler2D partState; uniform sampler2D selectionState; uniform float stateWidth; varying float partVisible; varying float partSelected;\n'+shader.vertexShader;
+   shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvec2 stateUv = vec2((partIndex + 0.5) / stateWidth, 0.5); vec4 state = texture2D(partState, stateUv); transformed += state.xyz; partVisible = state.w; partSelected = texture2D(selectionState, stateUv).r;');
+   shader.fragmentShader='varying float partVisible; varying float partSelected;\n'+shader.fragmentShader;
+   shader.fragmentShader=shader.fragmentShader.replace('#include <clipping_planes_fragment>','#include <clipping_planes_fragment>\nif (partVisible < 0.5) discard;');
+   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.85, 0.78), partSelected * 0.75);');
+  };materials.push(chunk10Material);
+  // --- Tuner pivot for repositioning the female reproductive cross-section model ---
+  const PIVOT=new T.Vector3(-0.009,.740,-0.065);
+  const tunerPivot=new T.Group();tunerPivot.position.copy(PIVOT);scene.add(tunerPivot);
+  const tunerGroup=new T.Group();tunerPivot.add(tunerGroup);
   let loaded=0;
   const loadChunk=async(ci:number)=>{
    const chunk=atlas.chunks[ci],compressed=!!chunk.gzip&&typeof DecompressionStream!=='undefined';const response=await fetch(compressed?chunk.gzip!:chunk.url,{signal:abort.signal});const buffer=await decodeModelResponse(response,chunk.bytes,compressed);if(disposed)return;
@@ -67,11 +96,15 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
     const g=new T.BufferGeometry();g.setAttribute('position',new T.BufferAttribute(new Float32Array(buffer,p.positions,p.vertexCount*3),3));
     // GPU normalized signed-short normals keep the complete atlas compact in memory.
     g.setAttribute('normal',new T.BufferAttribute(new Int16Array(buffer,p.normals,p.vertexCount*3),3,true));g.setIndex(new T.BufferAttribute(new Uint32Array(buffer,p.indices,p.indexCount),1));
-    g.boundingBox=bounds[i].clone();g.computeBoundingSphere();const pick=new T.Mesh(g);pick.matrixAutoUpdate=false;pickers[i]=pick;geometries.push(g);
+    if((p as {uvs?:number}).uvs!==undefined)g.setAttribute('uv',new T.BufferAttribute(new Float32Array(buffer,(p as {uvs:number}).uvs,p.vertexCount*2),2));
+    const isFRC=chunk.url.includes('female-10.bin');
+    g.boundingBox=bounds[i].clone();g.computeBoundingSphere();const pick=new T.Mesh(g);pick.matrixAutoUpdate=isFRC;pickers[i]=pick;geometries.push(g);
+    if(isFRC)tunerGroup.add(pick);
     g.setAttribute('partIndex',new T.BufferAttribute(new Float32Array(p.vertexCount).fill(i),1));
     const list=groups.get(p.system)??[];list.push(g);groups.set(p.system,list);
    });
-   groups.forEach((gs,system)=>{const geometry=mergeGeometries(gs,false);if(!geometry)throw new Error('Could not assemble anatomy geometry.');geometries.push(geometry);const mesh=new T.Mesh(geometry,mats.get(system as never));mesh.frustumCulled=false;scene.add(mesh);});
+   const isChunkFRC=chunk.url.includes('female-10.bin');
+   groups.forEach((gs,system)=>{const geometry=mergeGeometries(gs,false);if(!geometry)throw new Error('Could not assemble anatomy geometry.');geometries.push(geometry);const mesh=new T.Mesh(geometry,isChunkFRC?chunk10Material:mats.get(system as never));mesh.frustumCulled=false;if(isChunkFRC){tunerGroup.add(mesh);}else{scene.add(mesh);}});
    lastState=null;loaded++;onProgress(Math.round(loaded/atlas.chunks.length*100));dirty=true;
   };
   (async()=>{try{let cursor=0;await Promise.all(Array.from({length:3},async()=>{while(cursor<atlas.chunks.length){const i=cursor++;await loadChunk(i);}}));if(!disposed){ready=true;dirty=true;}}catch(e){if(!disposed)onError(e instanceof Error?e.message:'Could not load the anatomy.');}})();

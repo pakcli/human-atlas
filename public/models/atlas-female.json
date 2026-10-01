@@ -21300,7 +21300,8 @@
       "chunk": 10,
       "positions": 0,
       "normals": 185856,
-      "indices": 278784,
+      "uvs": 278784,
+      "indices": 402688,
       "vertexCount": 15488,
       "indexCount": 90603,
       "bounds": [
@@ -21322,9 +21323,10 @@
       "conceptId": "FMA:17558",
       "system": "reproductive",
       "chunk": 10,
-      "positions": 641196,
-      "normals": 1015296,
-      "indices": 1202348,
+      "positions": 765100,
+      "normals": 1139200,
+      "uvs": 1326252,
+      "indices": 1575652,
       "vertexCount": 31175,
       "indexCount": 181653,
       "bounds": [
@@ -32846,9 +32848,9 @@
     },
     {
       "url": "/models/female-10.bin",
-      "bytes": 1928960,
+      "bytes": 2302264,
       "gzip": "/models/female-10.bin.gz",
-      "gzipBytes": 1095104
+      "gzipBytes": 1335263
     }
   ],
   "triangles": 1898554,
