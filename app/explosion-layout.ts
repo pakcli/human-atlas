@@ -9,7 +9,8 @@ export function createExplosionLayout(parts:Part[],aspect=1){
  if(skinParts.length===0 || dissectedParts.length===0){
   const cards=parts.map(p=>({id:p.id,system:p.system,width:Math.max(.035,p.bounds[1][0]-p.bounds[0][0])+.04,height:Math.max(.035,p.bounds[1][1]-p.bounds[0][1])+.04}));
   const area=cards.reduce((n,c)=>n+c.width*c.height,0),maxWidth=Math.max(.3,...cards.map(c=>c.width));
-  const targetWidth=Math.max(maxWidth,Math.sqrt(area*Math.max(.5,Math.min(1.5,aspect)))*1.18);
+  const targetHeight=1.723;
+  const targetWidth=Math.max(maxWidth,area/targetHeight,Math.sqrt(area*1.5)*1.18);
   cards.sort((a,b)=>b.height-a.height||a.id.localeCompare(b.id));
   const cells=new Map<string,LayoutCell>();let x=0,y=0,row=0,usedWidth=0;
   for(const c of cards){if(x>0&&x+c.width>targetWidth){x=0;y+=row;row=0;}cells.set(c.id,{x:x+c.width/2,y:-y-c.height/2,width:c.width,height:c.height});x+=c.width;usedWidth=Math.max(usedWidth,x);row=Math.max(row,c.height);}
@@ -30,7 +31,7 @@ export function createExplosionLayout(parts:Part[],aspect=1){
  // Target dissected block height to match 100% of human skin height along Y axis (1.72m).
  // Width adjusts dynamically so all parts fit cleanly in rows.
  const targetHeight = skinHeight;
- const targetWidth = Math.max(maxWidth, area / targetHeight);
+ const targetWidth = Math.max(maxWidth, Math.sqrt(area * 1.5) * 1.15);
 
  dissectedCards.sort((a,b)=>b.height-a.height||a.id.localeCompare(b.id));
  const cells=new Map<string,LayoutCell>();let x=0,y=0,row=0,usedWidth=0;

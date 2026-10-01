@@ -1,7 +1,7 @@
 import {flushSync} from 'react-dom';
 import {registerAtlasTools} from './agent-tools';
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Activity,ArrowRightLeft,ArrowUpRight,Check,ChevronDown,ChevronRight,ChevronUp,CircleDot,Focus,Info,Layers3,Moon,Pause,RotateCcw,RotateCw,Search,Share2,Sun,X} from 'lucide-react';
+import {Activity,ArrowRightLeft,ArrowUpRight,Check,ChevronDown,ChevronLeft,ChevronRight,ChevronUp,CircleDot,Eye,EyeOff,Focus,Info,Layers3,Maximize,Minimize,Moon,Pause,RotateCcw,RotateCw,Search,Share2,Sun,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Badge} from '@/components/ui/badge';
 import {Slider} from '@/components/ui/slider';
@@ -58,6 +58,40 @@ export default function Home(){
 
  const initialSession=useRef(getInitialSession());
  const [theme,setTheme]=useState<'light'|'dark'>(()=>initialSession.current.theme);
+ const [navState,setNavState]=useState<{overflowX:boolean;overflowY:boolean;tx:number;ty:number}>({
+  overflowX:false,
+  overflowY:false,
+  tx:0.5,
+  ty:0.5
+ });
+
+ useEffect(()=>{
+  const handleNav=(e:Event)=>{
+   const d=(e as CustomEvent).detail;
+   if(d){
+    setNavState({
+     overflowX:!!d.overflowX,
+     overflowY:!!d.overflowY,
+     tx:typeof d.tx==='number'?d.tx:0.5,
+     ty:typeof d.ty==='number'?d.ty:0.5
+    });
+   }
+  };
+  window.addEventListener('atlas-nav-update',handleNav);
+  return ()=>window.removeEventListener('atlas-nav-update',handleNav);
+ },[]);
+
+ const panX=(v:number)=>{
+  setNavState(s=>({...s,tx:v}));
+  window.dispatchEvent(new CustomEvent('atlas-pan-x',{detail:{val:v}}));
+ };
+ const panY=(v:number)=>{
+  setNavState(s=>({...s,ty:v}));
+  window.dispatchEvent(new CustomEvent('atlas-pan-y',{detail:{val:v}}));
+ };
+ const fitAll=()=>{
+  window.dispatchEvent(new CustomEvent('atlas-fit-all'));
+ };
 
  useEffect(()=>{
   if(typeof window==='undefined')return;
@@ -81,6 +115,58 @@ export default function Home(){
  const [about,setAbout]=useState(false);
  const [query,setQuery]=useState('');
  const [chosen,setChosen]=useState<Concept|null>(null);
+ const [mobileSheetMode,setMobileSheetMode]=useState<'closed'|'split'|'full'>('closed');
+ const [mobileSheetTab,setMobileSheetTab]=useState<'systems'|'detail'>('systems');
+ const [cameraPillOpen,setCameraPillOpen]=useState(false);
+ const [mobileExplodeOpen,setMobileExplodeOpen]=useState(false);
+ const [dockSide,setDockSide]=useState<'right'|'left'>('right');
+ const [cleanUI,setCleanUI]=useState(false);
+ const [isFullscreen,setIsFullscreen]=useState(false);
+
+ useEffect(()=>{
+  const handleFs=()=>setIsFullscreen(Boolean(document.fullscreenElement));
+  document.addEventListener('fullscreenchange',handleFs);
+  document.addEventListener('webkitfullscreenchange',handleFs);
+  return ()=>{
+   document.removeEventListener('fullscreenchange',handleFs);
+   document.removeEventListener('webkitfullscreenchange',handleFs);
+  };
+ },[]);
+
+ const toggleFullscreen=()=>{
+  if(!document.fullscreenElement){
+   if(document.documentElement.requestFullscreen){
+    document.documentElement.requestFullscreen().catch(()=>{});
+   }else if((document.documentElement as any).webkitRequestFullscreen){
+    (document.documentElement as any).webkitRequestFullscreen();
+   }
+  }else{
+   if(document.exitFullscreen){
+    document.exitFullscreen().catch(()=>{});
+   }else if((document as any).webkitExitFullscreen){
+    (document as any).webkitExitFullscreen();
+   }
+  }
+ };
+
+ const touchStartY=useRef<number|null>(null);
+
+ const handleTouchStart=(e:React.TouchEvent)=>{
+  touchStartY.current=e.touches[0].clientY;
+ };
+ const handleTouchEnd=(e:React.TouchEvent)=>{
+  if(touchStartY.current===null)return;
+  const touchEndY=e.changedTouches[0].clientY;
+  const deltaY=touchEndY-touchStartY.current;
+  touchStartY.current=null;
+  if(deltaY>50){
+   if(mobileSheetMode==='full')setMobileSheetMode('split');
+   else if(mobileSheetMode==='split')setMobileSheetMode('closed');
+  }else if(deltaY<-50){
+   if(mobileSheetMode==='closed')setMobileSheetMode('split');
+   else if(mobileSheetMode==='split')setMobileSheetMode('full');
+  }
+ };
 
  // Sync theme variables to DOM when theme, accent theme, or custom color changes
  useEffect(()=>{
@@ -105,6 +191,8 @@ export default function Home(){
   if(!p||details)return;
   setChosen({id:p.conceptId,name:p.name,elements:state.selected});
   setDetails(true);
+  setMobileSheetTab('detail');
+  setMobileSheetMode('split');
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[atlas]);
 
@@ -174,6 +262,8 @@ export default function Home(){
   setState(s=>({...s,selected:c.elements,isolate:false,rotate:false}));
   setDetails(true);
   setPanel(null);
+  setMobileSheetTab('detail');
+  setMobileSheetMode(m=>m==='closed'?'split':m);
  };
 
  const selectedParts=useMemo(()=>{
@@ -206,6 +296,8 @@ export default function Home(){
   setState(s=>({...s,selected:[id],isolate:false,rotate:false}));
   setDetails(true);
   setPanel(null);
+  setMobileSheetTab('detail');
+  setMobileSheetMode(m=>m==='closed'?'split':m);
  };
 
  const toggle=(id:SystemId)=>{
@@ -225,11 +317,16 @@ export default function Home(){
   setChosen(null);
   setDetails(false);
   setPanel(null);
+  setMobileSheetTab('systems');
  };
 
  const openPanel=(next:'layers'|'search')=>{
   setDetails(false);
   setPanel(p=>p===next?null:next);
+  if(next==='layers'){
+   setMobileSheetTab('systems');
+   setMobileSheetMode(m=>m==='closed'?'split':m);
+  }
  };
 
  const handleShare=()=>{
@@ -255,8 +352,8 @@ export default function Home(){
   });
  };
 
- return <main className="studio">
-  {atlas&&<AnatomyScene atlas={atlas} state={{...state,inspectorOpen:details&&selectedParts.length>0}} theme={theme} onSelect={choosePart} onProgress={n=>{setProgress(n);if(n===100)setError('');}} onError={setError}/>}
+ return <main className={`studio ${cleanUI?'clean-ui-mode':''}`} data-mobile-sheet={mobileSheetMode} data-clean-ui={cleanUI}>
+  {atlas&&<AnatomyScene atlas={atlas} state={{...state,inspectorOpen:details&&selectedParts.length>0}} theme={theme} dockSide={dockSide} onSelect={choosePart} onProgress={n=>{setProgress(n);if(n===100)setError('');}} onError={setError}/>}
   <ModelTuner
    sex={sex}
    onIsolateBones={()=>{
@@ -274,6 +371,74 @@ export default function Home(){
    }}
   />
   <div className="vignette"/>
+
+  {/* Clean UI: Floating Organ Name Badge */}
+  {cleanUI&&(
+   <div className="clean-ui-organ-tag glass" aria-live="polite">
+    <span className="clean-organ-dot" style={{background:system?.color??'#0284c7'}}/>
+    <span className="clean-organ-name">{chosen?chosen.name:(sex==='female'?'Female Reference Anatomy':'Adult Human Anatomy')}</span>
+    {chosen&&<span className="clean-organ-system">{system?.name}</span>}
+   </div>
+  )}
+
+  {/* Clean UI: Collapsed Corner Top View Control */}
+  {cleanUI&&(
+   <aside className="corner-top-dock glass" aria-label="Corner view controls">
+    <div className="corner-dock-angles">
+     {(['three-quarter','front','side','back'] as View[]).map((v,i)=>(
+      <button
+       key={v}
+       type="button"
+       className={`corner-btn ${state.view===v?'active':''}`}
+       onClick={()=>setState(s=>({...s,view:v,reset:s.reset+1,rotate:false}))}
+       aria-label={`${v} view`}
+       title={`${v} view`}
+      >
+       {['¾','F','S','B'][i]}
+      </button>
+     ))}
+    </div>
+    <div className="corner-divider"/>
+    <button
+     type="button"
+     className={`corner-btn ${state.rotate?'active':''}`}
+     disabled={state.explode>=.4}
+     onClick={()=>setState(s=>({...s,rotate:!s.rotate}))}
+     aria-label="Auto rotate"
+     title={state.rotate?'Pause rotation':'Auto rotate'}
+    >
+     {state.rotate?<Pause size={13}/>:<RotateCw size={13}/>}
+    </button>
+    <button
+     type="button"
+     className="corner-btn"
+     onClick={reset}
+     aria-label="Reset view"
+     title="Reset view"
+    >
+     <RotateCcw size={13}/>
+    </button>
+    <div className="corner-divider"/>
+    <button
+     type="button"
+     className={`corner-btn ${isFullscreen?'active':''}`}
+     onClick={toggleFullscreen}
+     aria-label={isFullscreen?'Exit fullscreen':'Enter fullscreen'}
+     title={isFullscreen?'Exit fullscreen':'Fullscreen'}
+    >
+     {isFullscreen?<Minimize size={13}/>:<Maximize size={13}/>}
+    </button>
+    <button
+     type="button"
+     className="corner-btn clean-toggle-btn active"
+     onClick={()=>setCleanUI(false)}
+     aria-label="Exit clean UI"
+     title="Exit clean UI (Restore standard layout)"
+    >
+     <EyeOff size={13}/>
+    </button>
+   </aside>
+  )}
 
   {/* Header left */}
   <header className="identity">
@@ -313,12 +478,14 @@ export default function Home(){
    </div>
   </header>
 
-  {/* Top center caption */}
-  <div className="top-center-caption">
+  {/* Top center caption (Desktop only) */}
+  <div className="top-center-caption desktop-only">
    <span className="caption-line"/>
    <span>{state.isolate?(chosen?.name??'SELECTED STRUCTURE'):state.explode>.95?'ANATOMICAL INVENTORY':state.explode>.05?'SEPARATED STRUCTURES':sex==='female'?'FEMALE · REFERENCE ANATOMY':'ADULT HUMAN · MALE'}</span>
    <span className="caption-line"/>
   </div>
+
+
 
   {/* Top actions right */}
   <nav className="top-actions" aria-label="Explorer panels">
@@ -332,6 +499,15 @@ export default function Home(){
    >
     {theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}
    </Button>
+   <Button
+    variant="ghost"
+    className={`icon-button ${isFullscreen?'active':''}`}
+    aria-label="Toggle fullscreen"
+    title={isFullscreen?'Exit fullscreen':'Fullscreen'}
+    onClick={toggleFullscreen}
+   >
+    {isFullscreen?<Minimize size={18}/>:<Maximize size={18}/>}
+   </Button>
    <Button variant="ghost" className={panel==='search'?'active':''} onClick={()=>openPanel('search')} aria-label="Search anatomy">
     <Search size={18}/><span>Find a structure</span><kbd>/</kbd>
    </Button>
@@ -343,6 +519,15 @@ export default function Home(){
     onClick={handleShare}
    >
     {copied?<Check size={18}/>:<Share2 size={18}/>}
+   </Button>
+   <Button
+    variant="ghost"
+    className={`icon-button ${cleanUI?'active':''} desktop-only`}
+    aria-label="Toggle clean UI"
+    title="Toggle clean UI (Zen mode)"
+    onClick={()=>setCleanUI(v=>!v)}
+   >
+    <Eye size={18}/>
    </Button>
    <Button variant="ghost" className="icon-button" aria-label="About this atlas" onClick={()=>{setDetails(false);setPanel(null);setAbout(true);}}>
     <Info size={18}/>
@@ -545,6 +730,16 @@ export default function Home(){
     <span>Reset view</span>
    </button>
 
+   <Button
+    variant="ghost"
+    className="deck-col-btn"
+    onClick={fitAll}
+    title="Fit all anatomy to frame"
+    aria-label="Fit all to frame"
+   >
+    <Focus size={15}/>
+   </Button>
+
    <div className="deck-divider"/>
 
    {/* 5. Explode anatomy vertical slider */}
@@ -568,7 +763,25 @@ export default function Home(){
      }}
      className="deck-vertical-slider"
     />
-    <span className="deck-col-label">EXPLODE</span>
+    <div className="deck-divider"/>
+    <Button
+     variant="ghost"
+     className={`deck-col-btn ${isFullscreen?'active':''}`}
+     onClick={toggleFullscreen}
+     title={isFullscreen?'Exit fullscreen':'Fullscreen view'}
+     aria-label="Toggle fullscreen"
+    >
+     {isFullscreen?<Minimize size={15}/>:<Maximize size={15}/>}
+    </Button>
+    <Button
+     variant="ghost"
+     className={`deck-col-btn ${cleanUI?'active':''}`}
+     onClick={()=>setCleanUI(v=>!v)}
+     title={cleanUI?'Exit clean UI':'Clean UI (Zen mode)'}
+     aria-label="Toggle clean UI"
+    >
+     {cleanUI?<EyeOff size={15}/>:<Eye size={15}/>}
+    </Button>
    </div>
   </aside>
 
@@ -646,6 +859,609 @@ export default function Home(){
   {progress<100&&!error&&<div className="loading glass" role="status"><Activity size={18}/><div><strong>Preparing the anatomy</strong><span>{progress}% · Loading {atlas?.parts.length.toLocaleString()??(sex==='female'?'888':'2,234')} pieces</span><div className="loading-track"><i style={{width:`${progress}%`}}/></div></div></div>}
   {error&&<div className="loading glass error" role="alert"><p>{error}</p><Button variant="ghost" onClick={()=>location.reload()}>Reload viewer</Button></div>}
 
+  {/* Mobile Side Dock: Camera controls docked flush against side edge when panel is closed */}
+  {mobileSheetMode==='closed'&&(
+   <aside
+    className="mobile-side-dock glass mobile-only"
+    data-side={dockSide}
+    aria-label="Camera view controls"
+   >
+    <div className="mobile-side-dock-inner">
+     {(['three-quarter','front','side','back'] as View[]).map((v,i)=>(
+      <button
+       key={v}
+       type="button"
+       className={`dock-btn ${state.view===v?'active':''}`}
+       onClick={()=>setState(s=>({...s,view:v,reset:s.reset+1,rotate:false}))}
+       aria-label={`${v} view`}
+       title={`${v} view`}
+      >
+       {['¾','F','S','B'][i]}
+      </button>
+     ))}
+     <div className="dock-divider"/>
+     <button
+      type="button"
+      className={`dock-btn ${state.rotate?'active':''}`}
+      disabled={state.explode>=.4}
+      onClick={()=>setState(s=>({...s,rotate:!s.rotate}))}
+      aria-label="Toggle auto-rotate"
+      title="Auto rotate"
+     >
+      {state.rotate?<Pause size={13}/>:<RotateCw size={13}/>}
+     </button>
+     <button
+      type="button"
+      className="dock-btn"
+      onClick={reset}
+      aria-label="Reset camera"
+      title="Reset view"
+     >
+      <RotateCcw size={13}/>
+     </button>
+     <button
+      type="button"
+      className="dock-btn"
+      onClick={fitAll}
+      aria-label="Fit all to frame"
+      title="Fit all to frame"
+     >
+      <Focus size={13}/>
+     </button>
+     <div className="dock-divider"/>
+     {/* Explode Toggle in Side Dock */}
+     <button
+      type="button"
+      className={`dock-btn ${state.explode>0.05?'active':''}`}
+      onClick={()=>{
+       const nextExp = state.explode > 0.05 ? 0 : 1.0;
+       setState(s => ({ ...s, explode: nextExp, rotate: false }));
+       setMobileExplodeOpen(nextExp > 0);
+      }}
+      aria-label={state.explode > 0.05 ? 'Assemble anatomy' : 'Explode anatomy'}
+      title={state.explode > 0.05 ? 'Assemble model' : 'Explode anatomy'}
+     >
+      <span style={{fontSize:'13px',lineHeight:1}}>💥</span>
+     </button>
+
+     {/* Vertical Explode Slider in Side Dock (following view control position) */}
+     {(state.explode > 0.05 || mobileExplodeOpen) && (
+      <div className="dock-explode-column">
+       <span className="dock-badge">{Math.round(state.explode * 100)}%</span>
+       <Slider
+        orientation="vertical"
+        aria-label="Explode anatomy vertical slider"
+        min={0}
+        max={100}
+        step={1}
+        value={[Math.round(state.explode * 100)]}
+        onValueChange={v => {
+         const val = Array.isArray(v) ? v[0] : v;
+         setState(s => ({ ...s, explode: val / 100, rotate: false }));
+        }}
+        className="dock-vertical-slider"
+       />
+      </div>
+     )}
+     <div className="dock-divider"/>
+     {/* Fullscreen toggle */}
+     <button
+      type="button"
+      className={`dock-btn ${isFullscreen?'active':''}`}
+      onClick={toggleFullscreen}
+      aria-label="Toggle fullscreen"
+      title="Fullscreen"
+     >
+      {isFullscreen?<Minimize size={13}/>:<Maximize size={13}/>}
+     </button>
+     {/* Clean UI toggle */}
+     <button
+      type="button"
+      className={`dock-btn ${cleanUI?'active':''}`}
+      onClick={()=>setCleanUI(v=>!v)}
+      aria-label="Toggle clean UI"
+      title="Clean UI"
+     >
+      <Eye size={13}/>
+     </button>
+     <div className="dock-divider"/>
+     {/* Swap Position Button: Toggles dock side between Left and Right */}
+     <button
+      type="button"
+      className="dock-btn swap-btn"
+      onClick={()=>setDockSide(s=>s==='right'?'left':'right')}
+      aria-label={`Move controls to ${dockSide==='right'?'left':'right'} edge`}
+      title={`Dock to ${dockSide==='right'?'left':'right'} side`}
+     >
+      <ArrowRightLeft size={13}/>
+     </button>
+    </div>
+   </aside>
+  )}
+
+  
+
+  {/* Desktop Horizontal Bottom Scrubber (when exploded) */}
+  {state.explode > 0.05 && !cleanUI && (
+   <div
+    className="desktop-exploded-scrubber desktop-only"
+    role="region"
+    aria-label="Desktop anatomical shelf scrubber"
+   >
+    <button
+     type="button"
+     className="scrubber-step-btn"
+     onClick={() => {
+      const tiers = [0, 0.25, 0.50, 0.75, 1.0];
+      const prev = [...tiers].reverse().find(t => t < state.explode - 0.04) ?? 0;
+      setState(s => ({ ...s, explode: prev, rotate: false }));
+     }}
+     aria-label="Previous anatomical tier"
+     title="Previous tier (Shelf)"
+    >
+     <ChevronLeft size={14} />
+    </button>
+    <div className="scrubber-center">
+     <span className="scrubber-tag">
+      {state.explode >= 0.85 ? 'Shelf 4 · Extremities' :
+       state.explode >= 0.60 ? 'Shelf 3 · Abdomen' :
+       state.explode >= 0.35 ? 'Shelf 2 · Thorax' :
+       state.explode > 0 ? 'Shelf 1 · Cranial' : 'Assembled'}
+     </span>
+     <Slider
+      aria-label="Desktop anatomical shelf navigation"
+      min={0}
+      max={100}
+      step={1}
+      value={[Math.round(state.explode * 100)]}
+      onValueChange={v => {
+       const val = Array.isArray(v) ? v[0] : v;
+       setState(s => ({ ...s, explode: val / 100, rotate: false }));
+      }}
+      className="scrubber-mini-slider"
+     />
+     <span className="scrubber-val">{Math.round(state.explode * 100)}%</span>
+    </div>
+    <button
+     type="button"
+     className="scrubber-step-btn"
+     onClick={() => {
+      const tiers = [0.25, 0.50, 0.75, 1.0];
+      const next = tiers.find(t => t > state.explode + 0.04) ?? 1.0;
+      setState(s => ({ ...s, explode: next, rotate: false }));
+     }}
+     aria-label="Next anatomical tier"
+     title="Next tier (Shelf)"
+    >
+     <ChevronRight size={14} />
+    </button>
+    <button
+     type="button"
+     className="scrubber-reset-btn"
+     onClick={() => {
+      setState(s => ({ ...s, explode: 0, rotate: false }));
+     }}
+     title="Reset explosion to 0%"
+     aria-label="Reset explode"
+    >
+     0%
+    </button>
+   </div>
+  )}
+
+  {/* v16 Plain Viewport Scrollers (Adaptive & Minimalist) */}
+  <div
+   className={`plain-viewport-scroller-x ${navState.overflowX && !cleanUI ? 'visible' : ''}`}
+   role="region"
+   aria-label="Horizontal viewport navigation"
+  >
+   <Slider
+    aria-label="Navigate scene horizontally"
+    min={0}
+    max={100}
+    step={1}
+    value={[Math.round(navState.tx * 100)]}
+    onValueChange={v => {
+     const val = Array.isArray(v) ? v[0] : v;
+     panX(val / 100);
+    }}
+    className="plain-scroller-slider"
+   />
+  </div>
+
+  <div
+   className={`plain-viewport-scroller-y ${navState.overflowY && !cleanUI ? 'visible' : ''}`}
+   role="region"
+   aria-label="Vertical viewport navigation"
+  >
+   <Slider
+    orientation="vertical"
+    aria-label="Navigate scene vertically"
+    min={0}
+    max={100}
+    step={1}
+    value={[Math.round(navState.ty * 100)]}
+    onValueChange={v => {
+     const val = Array.isArray(v) ? v[0] : v;
+     panY(val / 100);
+    }}
+    className="plain-scroller-slider-vertical"
+   />
+  </div>
+
+  {/* Mobile Unified Bottom Sheet: Pure 3-Tier Split/Full Panel (No Bottom Dock) */}
+  <section
+   className={`mobile-bottom-sheet glass mobile-only mode-${mobileSheetMode}`}
+   aria-label="Anatomy explorer drawer"
+   data-mode={mobileSheetMode}
+  >
+   {mobileSheetMode==='closed'?(
+    <button
+     type="button"
+     className="mobile-sheet-closed-bar"
+     onClick={()=>setMobileSheetMode('split')}
+     aria-label="Open anatomy systems explorer"
+    >
+     <div className="sheet-drag-pill"/>
+     <div className="sheet-closed-row">
+      <Layers3 size={15}/>
+      <span>Systems & Anatomy</span>
+      {selectedParts.length>0&&<span className="closed-part-tag"><span className="tab-dot" style={{background:system?.color??'#0284c7'}}/>{chosen?.name}</span>}
+      <ChevronUp size={14} className="closed-chevron"/>
+     </div>
+    </button>
+   ):(
+    <>
+     {/* Drag Handle Bar with Swipe-to-Snap */}
+     <div
+      className="sheet-handle-bar"
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      title="Swipe up for full screen, down to close"
+     >
+      <div className="sheet-drag-pill"/>
+     </div>
+
+     {/* TIER 1: View Controls (Angles, Rotate, Reset), Explode Toggle, Clean UI, and Close */}
+     <div className="mobile-tier1-controls">
+      <div className="tier1-angles">
+       <span className="tier1-label">viewmode:</span>
+       {(['three-quarter','front','side','back'] as View[]).map((v,i)=>(
+        <button
+         key={v}
+         type="button"
+         className={`tier1-cam-btn ${state.view===v?'active':''}`}
+         onClick={()=>setState(s=>({...s,view:v,reset:s.reset+1,rotate:false}))}
+         aria-label={`${v} view`}
+        >
+         {['¾','F','S','B'][i]}
+        </button>
+       ))}
+       <div className="tier1-divider"/>
+       <button
+        type="button"
+        className={`tier1-cam-btn ${state.rotate?'active':''}`}
+        disabled={state.explode>=.4}
+        onClick={()=>setState(s=>({...s,rotate:!s.rotate}))}
+        aria-label="Toggle auto-rotate"
+       >
+        {state.rotate?<Pause size={13}/>:<RotateCw size={13}/>}
+       </button>
+       <button
+        type="button"
+        className="tier1-cam-btn"
+        onClick={reset}
+        aria-label="Reset camera"
+        title="Reset view"
+       >
+        <RotateCcw size={13}/>
+       </button>
+      </div>
+
+      <div className="tier1-right">
+       <button
+        type="button"
+        className={`tier1-explode-btn ${state.explode>0.05?'active':''}`}
+        onClick={()=>{
+         const nextExp = state.explode > 0.05 ? 0 : 1.0;
+         setState(s => ({ ...s, explode: nextExp, rotate: false }));
+         setMobileExplodeOpen(nextExp > 0);
+        }}
+        aria-label={state.explode > 0.05 ? 'Assemble anatomy' : 'Explode anatomy'}
+        title={state.explode > 0.05 ? 'Assemble model' : 'Explode anatomy'}
+       >
+        <span>💥 {Math.round(state.explode*100)}%</span>
+       </button>
+       <button
+        type="button"
+        className={`tier1-cam-btn ${cleanUI?'active':''}`}
+        onClick={()=>setCleanUI(v=>!v)}
+        aria-label="Toggle clean UI"
+        title="Clean UI"
+       >
+        <Eye size={13}/>
+       </button>
+       <button
+        type="button"
+        className="tier1-close-btn"
+        onClick={()=>setMobileSheetMode('closed')}
+        aria-label="Close panel"
+       >
+        <X size={15}/>
+       </button>
+      </div>
+     </div>
+
+     {/* TIER 1.5: Exploded Shelf & Navigation Row (INSIDE the split bottom sheet) */}
+     {(state.explode > 0.05 || mobileExplodeOpen) && (
+      <div className="mobile-sheet-exploded-row" role="region" aria-label="Explode Anatomy Shelf Control">
+       <button
+        type="button"
+        className="scrubber-step-btn"
+        onClick={() => {
+         const tiers = [0, 0.25, 0.50, 0.75, 1.0];
+         const prev = [...tiers].reverse().find(t => t < state.explode - 0.04) ?? 0;
+         setState(s => ({ ...s, explode: prev, rotate: false }));
+        }}
+        aria-label="Previous tier"
+        title="Previous tier"
+       >
+        <ChevronLeft size={13} />
+       </button>
+       <span className="scrubber-tag">
+        {state.explode >= 0.85 ? 'Shelf 4 · Extremities' :
+         state.explode >= 0.60 ? 'Shelf 3 · Abdomen' :
+         state.explode >= 0.35 ? 'Shelf 2 · Thorax' :
+         state.explode > 0 ? 'Shelf 1 · Cranial' : 'Assembled'}
+       </span>
+       <Slider
+        aria-label="Explode anatomy slider"
+        min={0}
+        max={100}
+        step={1}
+        value={[Math.round(state.explode * 100)]}
+        onValueChange={v => {
+         const val = Array.isArray(v) ? v[0] : v;
+         setState(s => ({ ...s, explode: val / 100, rotate: false }));
+        }}
+        className="scrubber-mini-slider"
+       />
+       <span className="scrubber-val">{Math.round(state.explode * 100)}%</span>
+       <button
+        type="button"
+        className="scrubber-step-btn"
+        onClick={() => {
+         const tiers = [0.25, 0.50, 0.75, 1.0];
+         const next = tiers.find(t => t > state.explode + 0.04) ?? 1.0;
+         setState(s => ({ ...s, explode: next, rotate: false }));
+        }}
+        aria-label="Next tier"
+        title="Next tier"
+       >
+        <ChevronRight size={13} />
+       </button>
+       <button
+        type="button"
+        className="scrubber-reset-btn"
+        onClick={() => {
+         setState(s => ({ ...s, explode: 0, rotate: false }));
+         setMobileExplodeOpen(false);
+        }}
+        title="Reset explosion to 0%"
+        aria-label="Reset explode"
+       >
+        0%
+       </button>
+      </div>
+     )}
+
+     {/* TIER 2: Sistem dan Info below the control + Full/Split toggle */}
+     <div className="mobile-tier2-row">
+      <div className="mobile-tier2-tabs" role="tablist">
+       <button
+        type="button"
+        role="tab"
+        aria-selected={mobileSheetTab==='systems'}
+        className={`tier2-tab ${mobileSheetTab==='systems'?'active':''}`}
+        onClick={()=>setMobileSheetTab('systems')}
+       >
+        <Layers3 size={14}/>
+        <span>Systems Explorer</span>
+        <span className="tab-badge">{activeSystems.length}</span>
+       </button>
+
+       {selectedParts.length>0?(
+        <button
+         type="button"
+         role="tab"
+         aria-selected={mobileSheetTab==='detail'}
+         className={`tier2-tab ${mobileSheetTab==='detail'?'active':''}`}
+         onClick={()=>setMobileSheetTab('detail')}
+        >
+         <span className="tab-dot" style={{background:system?.color??'#0284c7'}}/>
+         <span className="tab-label-text">{chosen?.name??'Detail'}</span>
+        </button>
+       ):(
+        <span className="tier2-tab disabled" title="Select a 3D part to view detail">
+         <span>Detail (Select part)</span>
+        </span>
+       )}
+      </div>
+
+      <button
+       type="button"
+       className={`tier2-mode-btn ${mobileSheetMode==='full'?'active':''}`}
+       onClick={()=>setMobileSheetMode(m=>m==='full'?'split':'full')}
+       title={mobileSheetMode==='full'?'Switch to 50/50 split':'Switch to full screen'}
+       aria-label={mobileSheetMode==='full'?'Switch to split':'Switch to full screen'}
+      >
+       {mobileSheetMode==='full'?(
+        <><ChevronDown size={13}/><span>Split</span></>
+       ):(
+        <><ChevronUp size={13}/><span>Full</span></>
+       )}
+      </button>
+     </div>
+
+     {/* TIER 3: Content Panel */}
+     <div className="mobile-sheet-body">
+      {mobileSheetTab==='systems'?(
+       <div className="mobile-systems-view">
+        <div className="layer-presets">
+         <Button variant="ghost" aria-pressed={activeSystems.every(x=>state.visible.includes(x.id))} onClick={()=>setState(s=>({...s,selected:[],isolate:false,visible:activeSystems.map(x=>x.id).filter(x=>x!=='pregnancy')}))}>All</Button>
+         <Button variant="ghost" aria-pressed={state.visible.length===1&&state.visible[0]==='skeletal'} onClick={()=>setState(s=>({...s,selected:[],isolate:false,visible:['skeletal']}))}>Skeleton</Button>
+         <Button variant="ghost" aria-pressed={state.visible.length>=6&&['cardiac','respiratory','digestive','urinary','endocrine','reproductive'].every(id=>state.visible.includes(id as SystemId))} onClick={()=>setState(s=>({...s,selected:[],isolate:false,visible:['cardiac','respiratory','digestive','urinary','endocrine','reproductive']}))}>Organs</Button>
+        </div>
+
+        <div className="system-list">
+         {activeSystems.map(s=>{
+          const isExpanded=expandedSystems.has(s.id);
+          const isEnabled=state.visible.includes(s.id);
+          const currentOp=state.opacities?.[s.id]??DEFAULT_OPACITIES[s.id]??1.0;
+          const opPercent=Math.round(currentOp*100);
+
+          return (
+           <div className={`system-accordion-item ${isEnabled?'enabled':''}`} key={s.id}>
+            <div className="system-accordion-header">
+             <Button
+              variant="ghost"
+              className="system-name"
+              title={`Show only ${s.name.toLowerCase()}`}
+              onClick={()=>setState(v=>({...v,visible:[s.id],isolate:false,selected:[]}))}
+             >
+              <span className="system-dot" style={{background:s.color}}/>
+              {s.name}
+              <span className="system-count">{counts[s.id]}</span>
+             </Button>
+             <div style={{display:'flex',alignItems:'center',gap:'4px'}}>
+              <Button
+               variant="ghost"
+               className="system-expand-btn"
+               title={isExpanded?'Collapse transparency slider':'Adjust transparency'}
+               onClick={()=>toggleSystemAccordion(s.id)}
+              >
+               {isExpanded?<ChevronUp size={13}/>:<ChevronDown size={13}/>}
+              </Button>
+              <Switch checked={isEnabled} onCheckedChange={()=>toggle(s.id)}/>
+             </div>
+            </div>
+
+            {isExpanded&&(
+             <div className="system-opacity-drawer">
+              <div className="system-opacity-label">
+               <span>Opacity</span>
+               <span className="opacity-badge">{opPercent}%</span>
+              </div>
+              <Slider
+               aria-label={`${s.name} opacity`}
+               min={0}
+               max={100}
+               step={1}
+               value={[opPercent]}
+               onValueChange={v=>{
+                const val=Array.isArray(v)?v[0]:v;
+                setState(prev=>({
+                 ...prev,
+                 opacities:{...(prev.opacities??DEFAULT_OPACITIES),[s.id]:val/100}
+                }));
+               }}
+              />
+              <div className="opacity-presets">
+               <Button variant="ghost" className={`opacity-preset-btn ${opPercent===0?'active':''}`} onClick={()=>setState(prev=>({...prev,opacities:{...(prev.opacities??DEFAULT_OPACITIES),[s.id]:0}}))}>0%</Button>
+               <Button variant="ghost" className={`opacity-preset-btn ${opPercent===(s.id==='integumentary'?23:20)?'active':''}`} onClick={()=>setState(prev=>({...prev,opacities:{...(prev.opacities??DEFAULT_OPACITIES),[s.id]:s.id==='integumentary'?0.23:0.20}}))}>{s.id==='integumentary'?'23%':'20%'}</Button>
+               <Button variant="ghost" className={`opacity-preset-btn ${opPercent===50?'active':''}`} onClick={()=>setState(prev=>({...prev,opacities:{...(prev.opacities??DEFAULT_OPACITIES),[s.id]:0.50}}))}>50%</Button>
+               <Button variant="ghost" className={`opacity-preset-btn ${opPercent===100?'active':''}`} onClick={()=>setState(prev=>({...prev,opacities:{...(prev.opacities??DEFAULT_OPACITIES),[s.id]:1.0}}))}>100%</Button>
+              </div>
+             </div>
+            )}
+           </div>
+          );
+         })}
+        </div>
+
+        <div className="panel-foot">
+         <span>{visibleCount.toLocaleString()} pieces visible</span>
+         <Button variant="ghost" onClick={()=>setState(s=>({...s,visible:[],selected:[],isolate:false}))}>Hide all</Button>
+        </div>
+       </div>
+      ):(
+       <div className="mobile-detail-view">
+        <div className="detail-header">
+         <div className="detail-accent" style={{background:system?.color}}/>
+         <div className="eyebrow">{system?.name??'ANATOMY'}</div>
+         <div className="structure-title">{chosen?.name}</div>
+         {chosen&&(()=>{
+          const venn=getVennClassification(chosen.name,selected?.system??'connective',sex);
+          return <div className="venn-badge-container">
+           {venn==='shared'&&<Badge variant="outline" className="venn-badge venn-badge-shared"><span className="venn-dot shared"/>Shared Human Anatomy</Badge>}
+           {venn==='male_only'&&<Badge variant="outline" className="venn-badge venn-badge-male"><span className="venn-dot male"/>Male Reference Anatomy</Badge>}
+           {venn==='female_only'&&<Badge variant="outline" className="venn-badge venn-badge-female"><span className="venn-dot female"/>Female Reference Anatomy</Badge>}
+          </div>;
+         })()}
+        </div>
+
+        <div className="detail-scroll">
+         <div className="structure-description">
+          {chosen&&selected?getStandardizedDescription(chosen.name,selected.system,sex):''}
+         </div>
+
+         {chosen&&(()=>{
+          const homology=getHomology(chosen.name);
+          if(!homology)return null;
+          return <div className="homology-card">
+           <div className="homology-header">
+            <ArrowRightLeft size={13}/>
+            <span>BIOLOGICAL COUNTERPART</span>
+           </div>
+           <div className="homology-name">{homology.counterpartName} ({homology.counterpartSex==='female'?'Female':'Male'})</div>
+           <div className="homology-origin">Origin: {homology.developmentalOrigin}</div>
+           <p className="homology-notes">{homology.notes}</p>
+           <Button
+            variant="outline"
+            size="sm"
+            className="homology-btn"
+            onClick={()=>{
+             setPendingTarget(homology.counterpartName);
+             setSex(homology.counterpartSex);
+            }}
+           >
+            <span>Switch to {homology.counterpartSex==='female'?'Female':'Male'} view</span>
+            <ChevronRight size={14}/>
+           </Button>
+          </div>;
+         })()}
+
+         <div className="structure-meta">
+          <span>Atlas reference<strong>{chosen?.id}</strong></span>
+          <span>Selected pieces<strong>{state.selected.length.toLocaleString()}</strong></span>
+         </div>
+
+         {selectedParts.length>1&&<div className="member-list">
+          <h3>Included structures</h3>
+          {selectedParts.slice(0,50).map(p=><Button variant="ghost" key={p.id} onClick={()=>choosePart(p.id)}><span>{p.name}</span><ChevronRight size={14}/></Button>)}
+          {selectedParts.length>50&&<p>And {selectedParts.length-50} more modeled pieces.</p>}
+         </div>}
+
+         <a className="source-link" href={sex==='female'?'https://doi.org/10.48539/HBM352.BTSQ.586':'https://lifesciencedb.jp/bp3d/'} target="_blank" rel="noreferrer">
+          View anatomical source <ArrowUpRight size={14}/>
+         </a>
+        </div>
+
+        <div className="detail-actions">
+         <Button className={`primary-action ${state.isolate?'active':''}`} onClick={()=>setState(s=>({...s,isolate:!s.isolate,explode:0}))}>
+          <Focus size={18}/>{state.isolate?'Show surrounding anatomy':'Isolate structure'}<ChevronRight size={16}/>
+         </Button>
+         <Button variant="ghost" className="secondary-action" onClick={()=>{setState(s=>({...s,selected:[],isolate:false}));setMobileSheetTab('systems');}}>
+          Clear selection
+         </Button>
+        </div>
+       </div>
+      )}
+     </div>
+    </>
+   )}
+  </section>
+
   {/* Standardized Information Panel */}
   <Sheet open={details&&selectedParts.length>0} modal={false} disablePointerDismissal onOpenChange={setDetails}>
    <SheetContent initialFocus={detailTitle} className={`detail-sheet glass ${state.isolate?'is-isolated':''}`} showCloseButton={true}>
@@ -722,26 +1538,42 @@ export default function Home(){
   </Sheet>
 
   <Sheet open={about} onOpenChange={setAbout}>
-   <SheetContent className="about-sheet glass">
-    <div className="eyebrow">SOURCE & SCOPE</div>
-    <SheetTitle className="structure-title">A body, revealed.</SheetTitle>
-    <SheetDescription>Explore the human anatomy across two independent, open scientific reference collections.</SheetDescription>
-    <div className="about-copy">
-     <p><strong>Male · BodyParts3D 4.0</strong><br/>2,234 individual meshes and 3,432 named concepts from an adult male reference anatomy based on TARO MRI scan and medical illustration refinements. Complete coverage of skeleton, muscles, neurovasculature, and internal organs.</p>
-     <p><strong>Female · Human Reference Atlas (HuBMAP) v1.5</strong><br/>888 source meshes, including the whole-body surface, selected visceral organs, and female reproductive anatomy. Pregnancy reference structures (placenta and umbilical cord) are modeled in a dedicated layer.</p>
-     <p>These collections have different coverage and origins. Neither contains every possible human variation. Named concepts can contain multiple pieces; each source mesh is rendered with GPU acceleration.</p>
-     <p>Colors and system groupings are curated for educational exploration. The geometry is simplified for high-performance WebGL rendering. This interface is an anatomical reference, not a diagnostic or surgical tool.</p>
+   <SheetContent className="about-sheet glass" showCloseButton={false}>
+    <div className="about-sticky-header">
+     <div className="about-header-top">
+      <div className="eyebrow">SOURCE & SCOPE</div>
+      <button
+       type="button"
+       className="about-close-btn"
+       onClick={()=>setAbout(false)}
+       aria-label="Close about dialog"
+       title="Close"
+      >
+       <X size={16}/>
+      </button>
+     </div>
+     <SheetTitle className="structure-title">A body, revealed.</SheetTitle>
+     <SheetDescription>Explore the human anatomy across two independent, open scientific reference collections.</SheetDescription>
+    </div>
 
-     <h3>Male dataset (BodyParts3D)</h3>
-     <p>BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International.</p>
-     <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html" target="_blank" rel="noreferrer">Dataset license <ArrowUpRight size={14}/></a>
-     <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html" target="_blank" rel="noreferrer">Original geometry & metadata <ArrowUpRight size={14}/></a>
-     <a href="https://doi.org/10.1093/nar/gkn613" target="_blank" rel="noreferrer">Source publication (Mitsuhashi et al. 2009) <ArrowUpRight size={14}/></a>
+    <div className="about-copy-scroll">
+     <div className="about-copy">
+      <p><strong>Male · BodyParts3D 4.0</strong><br/>2,234 individual meshes and 3,432 named concepts from an adult male reference anatomy based on TARO MRI scan and medical illustration refinements. Complete coverage of skeleton, muscles, neurovasculature, and internal organs.</p>
+      <p><strong>Female · Human Reference Atlas (HuBMAP) v1.5</strong><br/>888 source meshes, including the whole-body surface, selected visceral organs, and female reproductive anatomy. Pregnancy reference structures (placenta and umbilical cord) are modeled in a dedicated layer.</p>
+      <p>These collections have different coverage and origins. Neither contains every possible human variation. Named concepts can contain multiple pieces; each source mesh is rendered with GPU acceleration.</p>
+      <p>Colors and system groupings are curated for educational exploration. The geometry is simplified for high-performance WebGL rendering. This interface is an anatomical reference, not a diagnostic or surgical tool.</p>
 
-     <h3>Female dataset (HuBMAP / HRA)</h3>
-     <p>Kristen Browne and Heidi Schlehlein, Human Reference Atlas / HuBMAP, <em>3D Reference Organ Set for Female v1.5</em> (2023). CC BY 4.0.</p>
-     <a href="https://doi.org/10.48539/HBM352.BTSQ.586" target="_blank" rel="noreferrer">Female reference DOI <ArrowUpRight size={14}/></a>
-     <a href="https://lod.humanatlas.io/ref-organ/united-female/v1.5" target="_blank" rel="noreferrer">Digital object repository <ArrowUpRight size={14}/></a>
+      <h3>Male dataset (BodyParts3D)</h3>
+      <p>BodyParts3D, © The Database Center for Life Science licensed under CC Attribution 4.0 International.</p>
+      <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html" target="_blank" rel="noreferrer">Dataset license <ArrowUpRight size={14}/></a>
+      <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html" target="_blank" rel="noreferrer">Original geometry & metadata <ArrowUpRight size={14}/></a>
+      <a href="https://doi.org/10.1093/nar/gkn613" target="_blank" rel="noreferrer">Source publication (Mitsuhashi et al. 2009) <ArrowUpRight size={14}/></a>
+
+      <h3>Female dataset (HuBMAP / HRA)</h3>
+      <p>Kristen Browne and Heidi Schlehlein, Human Reference Atlas / HuBMAP, <em>3D Reference Organ Set for Female v1.5</em> (2023). CC BY 4.0.</p>
+      <a href="https://doi.org/10.48539/HBM352.BTSQ.586" target="_blank" rel="noreferrer">Female reference DOI <ArrowUpRight size={14}/></a>
+      <a href="https://lod.humanatlas.io/ref-organ/united-female/v1.5" target="_blank" rel="noreferrer">Digital object repository <ArrowUpRight size={14}/></a>
+     </div>
     </div>
    </SheetContent>
   </Sheet>

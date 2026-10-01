@@ -8,15 +8,16 @@ import {decodeModelResponse} from './model-download';
 import {PointerTap} from './pointer-tap';
 import {SYSTEMS,DEFAULT_OPACITIES,type Atlas,type SceneState,type SystemId} from './anatomy';
 import {getThemePalette} from './theme-engine';
-interface Props {atlas:Atlas;state:SceneState;onSelect:(id:string)=>void;onProgress:(n:number)=>void;onError:(s:string)=>void;theme?:"light"|"dark"}
-export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,theme="light"}:Props){
+interface Props {atlas:Atlas;state:SceneState;onSelect:(id:string)=>void;onProgress:(n:number)=>void;onError:(s:string)=>void;theme?:"light"|"dark";dockSide?:"left"|"right"}
+export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,theme="light",dockSide="right"}:Props){
+ const latestDockSide=useRef(dockSide);latestDockSide.current=dockSide;
  const latestTheme=useRef(theme);latestTheme.current=theme;
  const host=useRef<HTMLDivElement>(null),latest=useRef(state),select=useRef(onSelect);
  latest.current=state;select.current=onSelect;
  const triggerRenderRef=useRef<()=>void>(()=>{});
  useEffect(()=>{
   triggerRenderRef.current();
- },[state,theme]);
+ },[state,theme,dockSide]);
  useEffect(()=>{
   const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView='',lastReset=-1,lastIsolate='',layoutKey='',amount=latest.current.explode;
   let lastState:SceneState|null=null,lastThemeKey='';
@@ -38,11 +39,51 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   controls.screenSpacePanning=true;controls.enablePan=true;controls.enableRotate=true;
   controls.mouseButtons={LEFT:T.MOUSE.ROTATE,MIDDLE:T.MOUSE.DOLLY,RIGHT:T.MOUSE.PAN};
   controls.touches={ONE:T.TOUCH.ROTATE,TWO:T.TOUCH.DOLLY_PAN};
+  const calcNavUpdate=()=>{
+   if(!ready)return;
+   let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+   let hasVis=false;
+   for(let i=0;i<atlas.parts.length;i++){
+    if(data[i*4+3]>.5){
+     const b=bounds[i];
+     const dx=data[i*4],dy=data[i*4+1];
+     if(b.min.x+dx<minX)minX=b.min.x+dx;
+     if(b.max.x+dx>maxX)maxX=b.max.x+dx;
+     if(b.min.y+dy<minY)minY=b.min.y+dy;
+     if(b.max.y+dy>maxY)maxY=b.max.y+dy;
+     hasVis=true;
+    }
+   }
+   if(!hasVis)return;
+   const D=camera.position.distanceTo(controls.target);
+   const halfFovRad=T.MathUtils.degToRad(camera.fov/2);
+   const frustumH=2*D*Math.tan(halfFovRad);
+   const frustumW=frustumH*camera.aspect;
+
+   const boxW=maxX-minX;
+   const boxH=maxY-minY;
+   const centerX=(minX+maxX)/2;
+   const centerY=(minY+maxY)/2;
+
+   const overflowX=boxW>frustumW*1.05;
+   const overflowY=boxH>frustumH*1.05;
+
+   const travelX=Math.max(0.01,(boxW-frustumW*.85)/2);
+   const travelY=Math.max(0.01,(boxH-frustumH*.85)/2);
+
+   const tx=overflowX?Math.max(0,Math.min(1,0.5+(controls.target.x-centerX)/(2*travelX))):0.5;
+   const ty=overflowY?Math.max(0,Math.min(1,0.5+(controls.target.y-centerY)/(2*travelY))):0.5;
+
+   window.dispatchEvent(new CustomEvent('atlas-nav-update',{
+    detail:{overflowX,overflowY,tx,ty}
+   }));
+  };
   const syncCam=()=>{
    (window as unknown as {__atlas_camera?:{pos:[number,number,number];target:[number,number,number]}}).__atlas_camera={
     pos:[parseFloat(camera.position.x.toFixed(2)),parseFloat(camera.position.y.toFixed(2)),parseFloat(camera.position.z.toFixed(2))],
     target:[parseFloat(controls.target.x.toFixed(2)),parseFloat(controls.target.y.toFixed(2)),parseFloat(controls.target.z.toFixed(2))],
    };
+   calcNavUpdate();
   };
   syncCam();
   controls.addEventListener('change',()=>{dirty=true;syncCam();});
@@ -152,6 +193,64 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    dirty=true;
   };
   window.addEventListener('atlas-camera-snap',handleSnap);
+  const handlePanX=(e:Event)=>{
+   const d=(e as CustomEvent).detail as {val:number};
+   if(typeof d?.val!=='number')return;
+   let minX=Infinity,maxX=-Infinity;let hasVis=false;
+   for(let i=0;i<atlas.parts.length;i++){
+    if(data[i*4+3]>.5){
+     const b=bounds[i],dx=data[i*4];
+     if(b.min.x+dx<minX)minX=b.min.x+dx;
+     if(b.max.x+dx>maxX)maxX=b.max.x+dx;
+     hasVis=true;
+    }
+   }
+   if(!hasVis)return;
+   const D=camera.position.distanceTo(controls.target);
+   const frustumW=2*D*Math.tan(T.MathUtils.degToRad(camera.fov/2))*camera.aspect;
+   const boxW=maxX-minX,centerX=(minX+maxX)/2;
+   const travelX=Math.max(0.01,(boxW-frustumW*.85)/2);
+   const newTargetX=centerX+T.MathUtils.lerp(-travelX,travelX,d.val);
+   const deltaX=newTargetX-controls.target.x;
+   controls.target.x+=deltaX;
+   camera.position.x+=deltaX;
+   controls.update();
+   dirty=true;
+   syncCam();
+  };
+  window.addEventListener('atlas-pan-x',handlePanX);
+
+  const handlePanY=(e:Event)=>{
+   const d=(e as CustomEvent).detail as {val:number};
+   if(typeof d?.val!=='number')return;
+   let minY=Infinity,maxY=-Infinity;let hasVis=false;
+   for(let i=0;i<atlas.parts.length;i++){
+    if(data[i*4+3]>.5){
+     const b=bounds[i],dy=data[i*4+1];
+     if(b.min.y+dy<minY)minY=b.min.y+dy;
+     if(b.max.y+dy>maxY)maxY=b.max.y+dy;
+     hasVis=true;
+    }
+   }
+   if(!hasVis)return;
+   const D=camera.position.distanceTo(controls.target);
+   const frustumH=2*D*Math.tan(T.MathUtils.degToRad(camera.fov/2));
+   const boxH=maxY-minY,centerY=(minY+maxY)/2;
+   const travelY=Math.max(0.01,(boxH-frustumH*.85)/2);
+   const newTargetY=centerY+T.MathUtils.lerp(-travelY,travelY,d.val);
+   const deltaY=newTargetY-controls.target.y;
+   controls.target.y+=deltaY;
+   camera.position.y+=deltaY;
+   controls.update();
+   dirty=true;
+   syncCam();
+  };
+  window.addEventListener('atlas-pan-y',handlePanY);
+
+  const handleFitAll=()=>{
+   fit(latest.current.view,amount);
+  };
+  window.addEventListener('atlas-fit-all',handleFitAll);
   let loaded=0;
   const tunerPartIndices=new Set<number>(); // parts in female-10.bin - position via tunerPivot, not shader offset
   const loadChunk=async(ci:number)=>{
@@ -174,13 +273,38 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    lastState=null;loaded++;onProgress(Math.round(loaded/atlas.chunks.length*100));dirty=true;
   };
   (async()=>{try{let cursor=0;await Promise.all(Array.from({length:3},async()=>{while(cursor<atlas.chunks.length){const i=cursor++;await loadChunk(i);}}));if(!disposed){ready=true;dirty=true;}}catch(e){if(!disposed)onError(e instanceof Error?e.message:'Could not load the anatomy.');}})();
-  const fit=(view:string,extent=0)=>{
-   const aspect=camera.aspect,mobile=el.clientWidth<768,normalDistance=mobile?Math.max(4.5,1.8*el.clientHeight/Math.max(160,el.clientHeight-350)/(2*Math.tan(T.MathUtils.degToRad(camera.fov/2)))):4;
-   const reservedHeight=mobile?350:270;const availableAspect=Math.max(.35,(el.clientWidth-(mobile?40:340))/Math.max(160,el.clientHeight-reservedHeight));const atlasDistance=Math.max(packingHeight,packingWidth/availableAspect)/(2*Math.tan(T.MathUtils.degToRad(camera.fov/2)))*(el.clientHeight/Math.max(160,el.clientHeight-reservedHeight))*1.08;
-   const distance=T.MathUtils.lerp(normalDistance,Math.max(.2,atlasDistance),extent);
-   const direction=view==='front'?new T.Vector3(0,.02,1):view==='back'?new T.Vector3(0,.02,-1):view==='side'?new T.Vector3(1,.02,0):new T.Vector3(.35,.06,1).normalize();
-   controls.target.set(extent>.1&&el.clientWidth>767?-packingWidth*.12:0,extent>.1?.88:(mobile?.85:.86),0);camera.position.copy(controls.target).addScaledVector(direction,distance);controls.update();dirty=true;
-  };
+  const fit=(view:string,expAmount=0)=>{
+    const aspect=camera.aspect,mobile=el.clientWidth<768;
+    const reservedHeight=mobile?(el.clientHeight<520?30:96):270;
+    const reservedWidth=mobile?84:360;
+
+    const availableHeight=Math.max(160,el.clientHeight-reservedHeight);
+    const availableWidth=Math.max(160,el.clientWidth-reservedWidth);
+    const availableAspect=availableWidth/availableHeight;
+    const halfFovRad=T.MathUtils.degToRad(camera.fov/2);
+
+    const curW=T.MathUtils.lerp(0.54,packingWidth,expAmount);
+    const curH=T.MathUtils.lerp(1.723,packingHeight,expAmount);
+
+    const distH=curH/(2*Math.tan(halfFovRad))*(el.clientHeight/availableHeight);
+    const distW=(curW/availableAspect)/(2*Math.tan(halfFovRad))*(el.clientHeight/availableHeight);
+    const requiredDist=Math.max(distH,distW)*1.18;
+
+    const normalDistance=mobile?Math.max(3.8,1.8*el.clientHeight/Math.max(160,el.clientHeight-(el.clientHeight<520?30:160))/(2*Math.tan(halfFovRad))):4;
+    const distance=Math.max(normalDistance,requiredDist);
+
+    const currentDock=latestDockSide.current||'right';
+    const frustumW=2*distance*Math.tan(halfFovRad)*camera.aspect;
+    const pixelShiftX=mobile?(currentDock==='right'?-32:32):-38;
+    const worldShiftX=(pixelShiftX/el.clientWidth)*frustumW;
+
+    const targetX=worldShiftX+(expAmount>.1&&el.clientWidth>767?-packingWidth*.06:0);
+    controls.target.set(targetX,expAmount>.1?.88:(mobile?.85:.86),0);
+
+    const direction=view==='front'?new T.Vector3(0,.02,1):view==='back'?new T.Vector3(0,.02,-1):view==='side'?new T.Vector3(1,.02,0):new T.Vector3(.35,.06,1).normalize();
+    camera.position.copy(controls.target).addScaledVector(direction,distance);
+    controls.update();dirty=true;
+   };
   const resize=()=>{layoutKey='';lastState=null;renderer.setPixelRatio(Math.min(devicePixelRatio,el.clientWidth<768||el.clientHeight<600?1.5:2));camera.aspect=el.clientWidth/el.clientHeight;camera.updateProjectionMatrix();renderer.setSize(el.clientWidth,el.clientHeight);fit(latest.current.view,amount);};const observer=new ResizeObserver(resize);observer.observe(el);
   const raycaster=new T.Raycaster(),pointer=new T.Vector2(),tap=new PointerTap(),worldBox=new T.Box3(),hitPoint=new T.Vector3();
   const planePoint1=new T.Vector3(),planePoint2=new T.Vector3(),panCoord=new T.Vector2();
@@ -376,8 +500,8 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    if(changed||moving||lastExtent<0){
     const visible=new Set(s.visible),selection=new Set(s.selected);
     const visibleParts=atlas.parts.filter(p=>s.isolate?selection.has(p.id):visible.has(p.system)||selection.has(p.id));
-    const nextLayoutKey=visibleParts.map(p=>p.id).join(',')+':'+camera.aspect.toFixed(3);
-    if(nextLayoutKey!==layoutKey){const layout=createExplosionLayout(visibleParts,camera.aspect);packingWidth=layout.width;packingHeight=layout.height;atlas.parts.forEach((p,i)=>{const cell=layout.cells.get(p.id);offsets[i]=cell?new T.Vector3(cell.x,cell.y+.85,0):centers[i].clone();});layoutKey=nextLayoutKey;if(amount>.05&&!s.isolate)fit(s.view,Math.max(0,(amount-.3)/.7));}
+    const nextLayoutKey=visibleParts.map(p=>p.id).join(',');
+    if(nextLayoutKey!==layoutKey){const layout=createExplosionLayout(visibleParts,1.5);packingWidth=layout.width;packingHeight=layout.height;atlas.parts.forEach((p,i)=>{const cell=layout.cells.get(p.id);offsets[i]=cell?new T.Vector3(cell.x,cell.y+.85,0):centers[i].clone();});layoutKey=nextLayoutKey;if(amount>.05&&!s.isolate)fit(s.view,Math.max(0,(amount-.3)/.7));}
 
     atlas.parts.forEach((p,i)=>{
      const c=centers[i],destination=offsets[i];let dx=0,dy=0,dz=0;
@@ -388,7 +512,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
     });partTexture.needsUpdate=true;selectionTexture.needsUpdate=true;markerGeometry.attributes.position.needsUpdate=true;lastState=s;lastExtent=amount;dirty=true;
    }
    if(s.view!==lastView||s.reset!==lastReset){fit(s.view,amount);lastView=s.view;lastReset=s.reset;}
-   if(moving&&!s.isolate)fit(s.view,Math.max(0,(amount-.3)/.7));
+   if(moving&&!s.isolate)fit(s.view,amount);
    const isolateKey=s.isolate?s.selected.join(',')+':'+s.reset+':'+s.inspectorOpen+':'+camera.aspect:'';
    if(isolateKey!==lastIsolate||(s.isolate&&moving)){
     if(s.isolate){const box=new T.Box3();atlas.parts.forEach((p,i)=>{if(s.selected.includes(p.id))box.union(bounds[i].clone().translate(new T.Vector3(data[i*4],data[i*4+1],data[i*4+2])));});
@@ -415,12 +539,12 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    controls.autoRotate=s.rotate&&!s.isolate&&amount<.4;
    controls.autoRotateSpeed=.65;
    controls.update();
-   if(controls.autoRotate)dirty=true;
+   if(controls.autoRotate)dirty=true;if(dirty||moving)calcNavUpdate();
    if(dirty){renderer.render(scene,camera);targets=[];if(amount>.45){const hasSolid=atlas.parts.some((p,i)=>p.system!=='integumentary'&&data[i*4+3]>.5);atlas.parts.forEach((p,i)=>{if(data[i*4+3]<.5||(hasSolid&&p.system==='integumentary'))return;let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;for(let corner=0;corner<8;corner++){projected.set(p.bounds[(corner&1)?1:0][0]+data[i*4],p.bounds[(corner&2)?1:0][1]+data[i*4+1],p.bounds[(corner&4)?1:0][2]+data[i*4+2]).project(camera);const x=(projected.x+1)*el.clientWidth/2,y=(1-projected.y)*el.clientHeight/2;left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}projected.copy(centers[i]).add(new T.Vector3(data[i*4],data[i*4+1],data[i*4+2])).project(camera);if(projected.z< -1||projected.z>1)return;targets.push({index:i,x:(projected.x+1)*el.clientWidth/2,y:(1-projected.y)*el.clientHeight/2,left,right,top,bottom});});}dirty=false;}
 
   };animate();
   const contextLost=(e:Event)=>{e.preventDefault();onError('The 3D session was paused by your device. Reload to continue.');};renderer.domElement.addEventListener('webglcontextlost',contextLost);
-  return()=>{disposed=true;abort.abort();cancelAnimationFrame(frame);window.removeEventListener('atlas-mesh-tune',handleTune);window.removeEventListener('atlas-camera-snap',handleSnap);observer.disconnect();controls.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());scene.traverse(o=>{if(o instanceof T.Mesh&&!geometries.includes(o.geometry)){o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>m.dispose());}});env.dispose();partTexture.dispose();selectionTexture.dispose();markerGeometry.dispose();markerMaterial.dispose();hover.remove();renderer.domElement.removeEventListener('pointerdown',down,{capture:true} as never);renderer.domElement.removeEventListener('pointermove',move,{capture:true} as never);renderer.domElement.removeEventListener('pointerup',up,{capture:true} as never);renderer.domElement.removeEventListener('pointercancel',cancel,{capture:true} as never);renderer.domElement.removeEventListener('contextmenu',preventMenu);renderer.dispose();renderer.domElement.remove();};
+  return()=>{disposed=true;abort.abort();cancelAnimationFrame(frame);window.removeEventListener('atlas-mesh-tune',handleTune);window.removeEventListener('atlas-camera-snap',handleSnap);window.removeEventListener('atlas-pan-x',handlePanX);window.removeEventListener('atlas-pan-y',handlePanY);window.removeEventListener('atlas-fit-all',handleFitAll);observer.disconnect();controls.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());scene.traverse(o=>{if(o instanceof T.Mesh&&!geometries.includes(o.geometry)){o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>m.dispose());}});env.dispose();partTexture.dispose();selectionTexture.dispose();markerGeometry.dispose();markerMaterial.dispose();hover.remove();renderer.domElement.removeEventListener('pointerdown',down,{capture:true} as never);renderer.domElement.removeEventListener('pointermove',move,{capture:true} as never);renderer.domElement.removeEventListener('pointerup',up,{capture:true} as never);renderer.domElement.removeEventListener('pointercancel',cancel,{capture:true} as never);renderer.domElement.removeEventListener('contextmenu',preventMenu);renderer.dispose();renderer.domElement.remove();};
  },[atlas]);
  return <div className="scene" ref={host}/>;
 }
