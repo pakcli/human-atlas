@@ -1,7 +1,7 @@
 import {flushSync} from 'react-dom';
 import {registerAtlasTools} from './agent-tools';
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Activity,ArrowRightLeft,ArrowUpRight,ChevronRight,Focus,Info,Layers3,Pause,RotateCcw,RotateCw,Search,X} from 'lucide-react';
+import {Activity,ArrowRightLeft,ArrowUpRight,ChevronRight,CircleDot,Focus,Info,Layers3,Moon,Pause,RotateCcw,RotateCw,Search,Sun,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Badge} from '@/components/ui/badge';
 import {Slider} from '@/components/ui/slider';
@@ -14,10 +14,23 @@ import {getVennClassification,getHomology,getStandardizedDescription} from './an
 
 import { ModelTuner } from './model-tuner';
 
-const initial:SceneState={explode:0,visible:DEFAULT_VISIBLE,selected:[],isolate:false,view:'three-quarter',rotate:false,reset:0};
+const initial:SceneState={explode:0,visible:DEFAULT_VISIBLE,selected:[],isolate:false,view:'three-quarter',rotate:false,reset:0,showDots:true};
 
 export default function Home(){
  const detailTitle=useRef<HTMLHeadingElement>(null);
+ const [theme,setTheme]=useState<'light'|'dark'>(()=>{
+  if(typeof window!=='undefined'){
+   const stored=localStorage.getItem('atlas_theme');
+   if(stored==='dark'||stored==='light')return stored;
+  }
+  return 'light';
+ });
+ useEffect(()=>{
+  if(typeof window==='undefined')return;
+  localStorage.setItem('atlas_theme',theme);
+  if(theme==='dark'){document.documentElement.classList.add('dark');}else{document.documentElement.classList.remove('dark');}
+ },[theme]);
+ const toggleTheme=()=>setTheme(t=>t==='dark'?'light':'dark');
  const [sex,setSex]=useState<AnatomySex>(()=>{
   if(typeof window!=='undefined'){
    const param=new URLSearchParams(window.location.search).get('sex');
@@ -97,7 +110,7 @@ export default function Home(){
   const term=query.toLowerCase().trim();
   if(!term){
    const defaults=sex==='female'
-    ?['heart','brain','liver','uterus','ovary','stomach','urinary bladder','trachea']
+    ?['heart','brain','liver','uterus','vagina','ovary','stomach','urinary bladder','trachea']
     :['heart','brain','liver','stomach','spleen','pancreas','urinary bladder','trachea'];
    return defaults.map(name=>atlas.concepts.find(c=>c.name.toLowerCase()===name)).filter((x):x is Concept=>!!x);
   }
@@ -143,7 +156,7 @@ export default function Home(){
  };
 
  return <main className="studio">
-  {atlas&&<AnatomyScene atlas={atlas} state={{...state,inspectorOpen:details&&selectedParts.length>0}} onSelect={choosePart} onProgress={n=>{setProgress(n);if(n===100)setError('');}} onError={setError}/>}
+  {atlas&&<AnatomyScene atlas={atlas} state={{...state,inspectorOpen:details&&selectedParts.length>0}} theme={theme} onSelect={choosePart} onProgress={n=>{setProgress(n);if(n===100)setError('');}} onError={setError}/>}
   <ModelTuner
    sex={sex}
    onIsolateBones={()=>{
@@ -259,7 +272,20 @@ export default function Home(){
     <Slider aria-labelledby="explode-label" min={0} max={100} step={1} value={[state.explode*100]} onValueChange={v=>setState(s=>({...s,explode:(Array.isArray(v)?v[0]:v)/100,view:(Array.isArray(v)?v[0]:v)>80?'front':s.view,rotate:false}))}/>
     <div className="slider-endpoints"><span>Assembled</span><span>Every piece</span></div>
    </div>
-   <Button variant="ghost" className="dock-reset" onClick={reset} aria-label="Assemble and reset"><RotateCcw size={18}/><span>Reset</span></Button>
+   {state.explode > 0.05 && (
+     <Button
+      variant="ghost"
+      className="dock-reset"
+      onClick={()=>setState(s=>({...s,showDots:s.showDots===false?true:false}))}
+      title={state.showDots===false?'Show inspection dots':'Hide inspection dots (bare exploded view)'}
+      aria-label="Toggle inspection dots"
+      style={{color:state.showDots===false?'#94a3b8':'#38bdf8',display:'flex',alignItems:'center',gap:'5px'}}
+     >
+      <CircleDot size={18}/>
+      <span style={{fontSize:'12px'}}>{state.showDots===false?'Dots: Off':'Dots: On'}</span>
+     </Button>
+    )}
+    <Button variant="ghost" className="dock-reset" onClick={reset} aria-label="Assemble and reset"><RotateCcw size={18}/><span>Reset</span></Button>
   </div>
 
   <footer className="studio-footer">

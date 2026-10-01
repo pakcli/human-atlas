@@ -21295,7 +21295,7 @@
     {
       "id": "VH_F_vagina",
       "name": "vagina",
-      "conceptId": "UBERON:0000996",
+      "conceptId": "HRA:VH_F_vagina",
       "system": "reproductive",
       "chunk": 10,
       "positions": 0,
@@ -32782,6 +32782,13 @@
       "name": "Uterus",
       "elements": [
         "VH_F_uterus_xsection"
+      ]
+    },
+    {
+      "id": "UBERON:0000996",
+      "name": "vagina",
+      "elements": [
+        "VH_F_vagina"
       ]
     }
   ],

@@ -7,17 +7,18 @@ import {createExplosionLayout} from './explosion-layout';
 import {decodeModelResponse} from './model-download';
 import {PointerTap} from './pointer-tap';
 import {SYSTEMS,type Atlas,type SceneState} from './anatomy';
-interface Props {atlas:Atlas;state:SceneState;onSelect:(id:string)=>void;onProgress:(n:number)=>void;onError:(s:string)=>void}
-export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:Props){
+interface Props {atlas:Atlas;state:SceneState;onSelect:(id:string)=>void;onProgress:(n:number)=>void;onError:(s:string)=>void;theme?:"light"|"dark"}
+export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,theme="light"}:Props){
+ const latestTheme=useRef(theme);latestTheme.current=theme;
  const host=useRef<HTMLDivElement>(null),latest=useRef(state),select=useRef(onSelect);
  latest.current=state;select.current=onSelect;
  useEffect(()=>{
-  const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView='',lastReset=-1,lastIsolate='',layoutKey='',amount=0;
+  const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView='',lastReset=-1,lastIsolate='',layoutKey='',amount=latest.current.explode;
   let lastState:SceneState|null=null;
   const abort=new AbortController();
   let renderer:T.WebGLRenderer;
   try{renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});}catch{onError('This browser could not start the 3D viewer. Please try a browser with WebGL enabled.');return;}
-  renderer.setPixelRatio(Math.min(devicePixelRatio,innerWidth<768?1.5:2));renderer.setClearColor('#f2f3f3');renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;el.appendChild(renderer.domElement);
+  renderer.setPixelRatio(Math.min(devicePixelRatio,innerWidth<768?1.5:2));const isInitDark=latestTheme.current==='dark';renderer.setClearColor(isInitDark?'#1b1e22':'#f2f3f3');renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;el.appendChild(renderer.domElement);
   renderer.domElement.setAttribute('aria-label','Interactive human anatomy. Drag to orbit, pinch or scroll to zoom, and tap a structure to inspect it.');
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(34,1,.005,100),controls=new OrbitControls(camera,renderer.domElement);
   camera.position.set(1.4,1.05,3.6);controls.target.set(0,.85,0);controls.enableDamping=true;controls.dampingFactor=.085;controls.minDistance=.07;controls.maxDistance=40;controls.maxPolarAngle=Math.PI*.96;controls.addEventListener('change',()=>{dirty=true;});
@@ -25,10 +26,10 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
   scene.add(new T.HemisphereLight(0xffffff,0xa7acb2,1.05));
   const key=new T.DirectionalLight(0xfffaf4,2.3);key.position.set(-2,4,3);scene.add(key);
   const rim=new T.DirectionalLight(0xe9f0ff,1.8);rim.position.set(2,2,-3);scene.add(rim);
-  const ground=new T.Mesh(new T.CircleGeometry(30,96),new T.MeshStandardMaterial({color:0xd5d9dc,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-.019;scene.add(ground);
-  const platform=new T.Mesh(new T.CylinderGeometry(.68,.7,.028,100),new T.MeshStandardMaterial({color:0xeeeeec,metalness:.12,roughness:.67}));platform.position.y=-.016;scene.add(platform);
-  const ring=new T.Mesh(new T.RingGeometry(.63,.632,128),new T.MeshBasicMaterial({color:0x8c969f,transparent:true,opacity:.4,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.001;scene.add(ring);
-  const innerRing=new T.Mesh(new T.RingGeometry(.55,.551,128),new T.MeshBasicMaterial({color:0xa4aeb8,transparent:true,opacity:.16,side:T.DoubleSide}));innerRing.rotation.x=-Math.PI/2;innerRing.position.y=.001;scene.add(innerRing);
+  const ground=new T.Mesh(new T.CircleGeometry(30,96),new T.MeshStandardMaterial({color:isInitDark?0x14171a:0xd5d9dc,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-.019;scene.add(ground);
+  const platform=new T.Mesh(new T.CylinderGeometry(.68,.7,.028,100),new T.MeshStandardMaterial({color:isInitDark?0x23272d:0xeeeeec,metalness:.12,roughness:.67}));platform.position.y=-.016;scene.add(platform);
+  const ring=new T.Mesh(new T.RingGeometry(.63,.632,128),new T.MeshBasicMaterial({color:isInitDark?0x3d454e:0x8c969f,transparent:true,opacity:.4,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.001;scene.add(ring);
+  const innerRing=new T.Mesh(new T.RingGeometry(.55,.551,128),new T.MeshBasicMaterial({color:isInitDark?0x2c333b:0xa4aeb8,transparent:true,opacity:.16,side:T.DoubleSide}));innerRing.rotation.x=-Math.PI/2;innerRing.position.y=.001;scene.add(innerRing);
   const width=T.MathUtils.ceilPowerOfTwo(atlas.parts.length),data=new Float32Array(width*4),partTexture=new T.DataTexture(data,width,1,T.RGBAFormat,T.FloatType);partTexture.needsUpdate=true;
   const selectedData=new Uint8Array(width*4),selectionTexture=new T.DataTexture(selectedData,width,1);selectionTexture.needsUpdate=true;
   const materials:T.Material[]=[],geometries:T.BufferGeometry[]=[],pickers:(T.Mesh|undefined)[]=[],centers=atlas.parts.map(p=>new T.Vector3().fromArray(p.bounds[0]).add(new T.Vector3().fromArray(p.bounds[1])).multiplyScalar(.5));
@@ -64,15 +65,18 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
   // (line 86 vs 87 in the compiled frag shader), so the texture written in map_fragment would
   // be overwritten by our color_fragment injection. emissiveMap bypasses that pipeline.
   const texLoader=new T.TextureLoader();
-  const uterusTex=texLoader.load('/models/textures/uterus_xsection.jpg',()=>{dirty=true;});
+  const uterusTex=texLoader.load('/models/textures/uterus_xsection.jpg',(tex)=>{
+   tex.needsUpdate=true;
+   chunk10Material.needsUpdate=true;
+   dirty=true;
+  });
   uterusTex.colorSpace=T.SRGBColorSpace;
   uterusTex.flipY=false;
   const chunk10Material=new T.MeshStandardMaterial({
    map:uterusTex,
-   emissiveMap:uterusTex,
-   emissive:new T.Color(.38,.26,.22),
-   roughness:.62,
-   metalness:.03,
+   color:new T.Color(0xffffff),
+   roughness:.55,
+   metalness:.02,
    side:T.DoubleSide,
   });
   chunk10Material.onBeforeCompile=shader=>{
@@ -81,13 +85,47 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
    shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nvec2 stateUv = vec2((partIndex + 0.5) / stateWidth, 0.5); vec4 state = texture2D(partState, stateUv); transformed += state.xyz; partVisible = state.w; partSelected = texture2D(selectionState, stateUv).r;');
    shader.fragmentShader='varying float partVisible; varying float partSelected;\n'+shader.fragmentShader;
    shader.fragmentShader=shader.fragmentShader.replace('#include <clipping_planes_fragment>','#include <clipping_planes_fragment>\nif (partVisible < 0.5) discard;');
-   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.85, 0.78), partSelected * 0.75);');
+   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.42, 0.85, 0.78), partSelected * 0.25);');
   };materials.push(chunk10Material);
   // --- Tuner pivot for repositioning the female reproductive cross-section model ---
   const PIVOT=new T.Vector3(-0.009,.740,-0.065);
   const tunerPivot=new T.Group();tunerPivot.position.copy(PIVOT);scene.add(tunerPivot);
-  const tunerGroup=new T.Group();tunerPivot.add(tunerGroup);
+  const tunerGroup=new T.Group();tunerGroup.position.set(-PIVOT.x,-PIVOT.y,-PIVOT.z);tunerPivot.add(tunerGroup);
+  let currentTuner = {x:0,y:0,z:0,rotX:0,rotY:0,rotZ:0,scaleAll:1.0,scaleX:1.0,scaleY:1.0,scaleZ:1.0};
+  const applyTune=(v:{x?:number;y?:number;z?:number;rotX?:number;rotY?:number;rotZ?:number;scaleAll?:number;scaleX?:number;scaleY?:number;scaleZ?:number})=>{
+   if(!v)return;
+   currentTuner={x:v.x??0,y:v.y??0,z:v.z??0,rotX:v.rotX??0,rotY:v.rotY??0,rotZ:v.rotZ??0,scaleAll:v.scaleAll??1.0,scaleX:v.scaleX??1.0,scaleY:v.scaleY??1.0,scaleZ:v.scaleZ??1.0};
+   if(!v)return;
+   const x=v.x??0,y=v.y??0,z=v.z??0;
+   tunerPivot.position.set(PIVOT.x+x,PIVOT.y+y,PIVOT.z+z);
+   tunerPivot.rotation.set(T.MathUtils.degToRad(v.rotX??0),T.MathUtils.degToRad(v.rotY??0),T.MathUtils.degToRad(v.rotZ??0));
+   const sa=v.scaleAll??1.0;
+   tunerPivot.scale.set(sa*(v.scaleX??1.0),sa*(v.scaleY??1.0),sa*(v.scaleZ??1.0));
+   tunerPivot.updateMatrixWorld(true);
+   dirty=true;
+  };
+  try{
+   const stored=localStorage.getItem('female_mesh_tuner');
+   if(stored)applyTune(JSON.parse(stored));
+  }catch{}
+  const handleTune=(e:Event)=>{applyTune((e as CustomEvent).detail);};
+  window.addEventListener('atlas-mesh-tune',handleTune);
+  const handleSnap=(e:Event)=>{
+   const detail=(e as CustomEvent).detail as {view:'side'|'bottom'|'front'};
+   if(!detail?.view)return;
+   const target=PIVOT.clone();
+   controls.target.copy(target);
+   const offset=new T.Vector3();
+   if(detail.view==='side')offset.set(.35,.08,.25);
+   else if(detail.view==='bottom')offset.set(0,-.42,.06);
+   else if(detail.view==='front')offset.set(0,.02,.45);
+   camera.position.copy(target).add(offset);
+   controls.update();
+   dirty=true;
+  };
+  window.addEventListener('atlas-camera-snap',handleSnap);
   let loaded=0;
+  const tunerPartIndices=new Set<number>(); // parts in female-10.bin - position via tunerPivot, not shader offset
   const loadChunk=async(ci:number)=>{
    const chunk=atlas.chunks[ci],compressed=!!chunk.gzip&&typeof DecompressionStream!=='undefined';const response=await fetch(compressed?chunk.gzip!:chunk.url,{signal:abort.signal});const buffer=await decodeModelResponse(response,chunk.bytes,compressed);if(disposed)return;
    const groups=new Map<string,T.BufferGeometry[]>();
@@ -99,7 +137,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
     if((p as {uvs?:number}).uvs!==undefined)g.setAttribute('uv',new T.BufferAttribute(new Float32Array(buffer,(p as {uvs:number}).uvs,p.vertexCount*2),2));
     const isFRC=chunk.url.includes('female-10.bin');
     g.boundingBox=bounds[i].clone();g.computeBoundingSphere();const pick=new T.Mesh(g);pick.matrixAutoUpdate=isFRC;pickers[i]=pick;geometries.push(g);
-    if(isFRC)tunerGroup.add(pick);
+    if(isFRC){tunerPartIndices.add(i);tunerGroup.add(pick);}
     g.setAttribute('partIndex',new T.BufferAttribute(new Float32Array(p.vertexCount).fill(i),1));
     const list=groups.get(p.system)??[];list.push(g);groups.set(p.system,list);
    });
@@ -123,16 +161,32 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
   const up=(e:PointerEvent)=>{
    const validTap=tap.up(e.pointerId,e.clientX,e.clientY);if(!validTap||!ready)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);
    let nearest=Infinity,found=-1;const hasSolid=atlas.parts.some((p,i)=>p.system!=='integumentary'&&data[i*4+3]>.5);
-   pickers.forEach((mesh,i)=>{if(!mesh||data[i*4+3]<.5||(hasSolid&&atlas.parts[i].system==='integumentary'))return;worldBox.copy(bounds[i]).translate(mesh.position);if(!raycaster.ray.intersectBox(worldBox,hitPoint))return;const hits=raycaster.intersectObject(mesh,false);if(hits[0]&&hits[0].distance<nearest){nearest=hits[0].distance;found=i;}});
+   pickers.forEach((mesh,i)=>{if(!mesh||data[i*4+3]<.5||(hasSolid&&atlas.parts[i].system==='integumentary'))return;if(tunerPartIndices.has(i)){worldBox.setFromObject(mesh);}else{worldBox.copy(bounds[i]).translate(mesh.position);}if(!raycaster.ray.intersectBox(worldBox,hitPoint))return;const hits=raycaster.intersectObject(mesh,false);if(hits[0]&&hits[0].distance<nearest){nearest=hits[0].distance;found=i;}});
    if(found<0&&amount>.45)found=findTarget(e.clientX-rect.left,e.clientY-rect.top,e.pointerType==='touch'?24:16);if(found>=0){hover.hidden=true;select.current(atlas.parts[found].id);}
   };
   renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',cancel);
   const clock=new T.Clock();let lastExtent=-1;
+  let currentThemeName=latestTheme.current;
   const animate=()=>{
    if(disposed)return;frame=requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05),s=latest.current;
+   if(currentThemeName!==latestTheme.current){
+    currentThemeName=latestTheme.current;
+    const isDark=currentThemeName==='dark';
+    renderer.setClearColor(isDark?'#1b1e22':'#f2f3f3');
+    (ground.material as T.MeshStandardMaterial).color.set(isDark?0x14171a:0xd5d9dc);
+    (platform.material as T.MeshStandardMaterial).color.set(isDark?0x23272d:0xeeeeec);
+    (ring.material as T.MeshBasicMaterial).color.set(isDark?0x3d454e:0x8c969f);
+    (innerRing.material as T.MeshBasicMaterial).color.set(isDark?0x2c333b:0xa4aeb8);
+    dirty=true;
+   }
    const changed=lastState?.visible!==s.visible||lastState?.selected!==s.selected||lastState?.isolate!==s.isolate;
    const moving=Math.abs(amount-s.explode)>.0001;
    if(moving){amount=T.MathUtils.damp(amount,s.explode,8,dt);dirty=true;}
+   const exT=Math.min(1,amount/.35);
+   tunerPivot.position.set(PIVOT.x+T.MathUtils.lerp(currentTuner.x,0,exT),PIVOT.y+T.MathUtils.lerp(currentTuner.y,0,exT),PIVOT.z+T.MathUtils.lerp(currentTuner.z,0,exT));
+   tunerPivot.rotation.set(T.MathUtils.degToRad(T.MathUtils.lerp(currentTuner.rotX,0,exT)),T.MathUtils.degToRad(T.MathUtils.lerp(currentTuner.rotY,0,exT)),T.MathUtils.degToRad(T.MathUtils.lerp(currentTuner.rotZ,0,exT)));
+   const saT=T.MathUtils.lerp(currentTuner.scaleAll,1.0,exT);
+   tunerPivot.scale.set(saT*T.MathUtils.lerp(currentTuner.scaleX,1.0,exT),saT*T.MathUtils.lerp(currentTuner.scaleY,1.0,exT),saT*T.MathUtils.lerp(currentTuner.scaleZ,1.0,exT));
    if(changed||moving||lastExtent<0){
     const visible=new Set(s.visible),selection=new Set(s.selected);
     const visibleParts=atlas.parts.filter(p=>s.isolate?selection.has(p.id):visible.has(p.system)||selection.has(p.id));
@@ -156,12 +210,12 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError}:P
     }else if(lastIsolate){camera.clearViewOffset();fit(s.view,amount);}
     lastIsolate=isolateKey;
    }
-   controls.enableRotate=amount<.8;controls.mouseButtons.LEFT=amount<.8?T.MOUSE.ROTATE:T.MOUSE.PAN;controls.touches.ONE=amount<.8?T.TOUCH.ROTATE:T.TOUCH.PAN;ground.visible=platform.visible=ring.visible=innerRing.visible=amount<.5&&!s.isolate;markers.visible=amount>.75;controls.autoRotate=s.rotate&&!s.isolate&&amount<.4;controls.autoRotateSpeed=.65;controls.update();if(controls.autoRotate)dirty=true;
+   controls.enableRotate=amount<.8;controls.mouseButtons.LEFT=amount<.8?T.MOUSE.ROTATE:T.MOUSE.PAN;controls.touches.ONE=amount<.8?T.TOUCH.ROTATE:T.TOUCH.PAN;ground.visible=platform.visible=ring.visible=innerRing.visible=amount<.5&&!s.isolate;markers.visible=amount>.75&&(s.showDots??true);controls.autoRotate=s.rotate&&!s.isolate&&amount<.4;controls.autoRotateSpeed=.65;controls.update();if(controls.autoRotate)dirty=true;
    if(dirty){renderer.render(scene,camera);targets=[];if(amount>.45){const hasSolid=atlas.parts.some((p,i)=>p.system!=='integumentary'&&data[i*4+3]>.5);atlas.parts.forEach((p,i)=>{if(data[i*4+3]<.5||(hasSolid&&p.system==='integumentary'))return;let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;for(let corner=0;corner<8;corner++){projected.set(p.bounds[(corner&1)?1:0][0]+data[i*4],p.bounds[(corner&2)?1:0][1]+data[i*4+1],p.bounds[(corner&4)?1:0][2]+data[i*4+2]).project(camera);const x=(projected.x+1)*el.clientWidth/2,y=(1-projected.y)*el.clientHeight/2;left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}projected.copy(centers[i]).add(new T.Vector3(data[i*4],data[i*4+1],data[i*4+2])).project(camera);if(projected.z< -1||projected.z>1)return;targets.push({index:i,x:(projected.x+1)*el.clientWidth/2,y:(1-projected.y)*el.clientHeight/2,left,right,top,bottom});});}dirty=false;}
 
   };animate();
   const contextLost=(e:Event)=>{e.preventDefault();onError('The 3D session was paused by your device. Reload to continue.');};renderer.domElement.addEventListener('webglcontextlost',contextLost);
-  return()=>{disposed=true;abort.abort();cancelAnimationFrame(frame);observer.disconnect();controls.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());scene.traverse(o=>{if(o instanceof T.Mesh&&!geometries.includes(o.geometry)){o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>m.dispose());}});env.dispose();partTexture.dispose();selectionTexture.dispose();markerGeometry.dispose();markerMaterial.dispose();hover.remove();renderer.dispose();renderer.domElement.remove();};
+  return()=>{disposed=true;abort.abort();cancelAnimationFrame(frame);window.removeEventListener('atlas-mesh-tune',handleTune);window.removeEventListener('atlas-camera-snap',handleSnap);observer.disconnect();controls.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());scene.traverse(o=>{if(o instanceof T.Mesh&&!geometries.includes(o.geometry)){o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>m.dispose());}});env.dispose();partTexture.dispose();selectionTexture.dispose();markerGeometry.dispose();markerMaterial.dispose();hover.remove();renderer.dispose();renderer.domElement.remove();};
  },[atlas]);
  return <div className="scene" ref={host}/>;
 }
