@@ -488,7 +488,7 @@ export default function Home(){
      min={0}
      max={100}
      step={1}
-     value={[state.explode*100]}
+     value={[Math.round(state.explode*100)]}
      onValueChange={v=>{
       const val=Array.isArray(v)?v[0]:v;
       setState(s=>({
