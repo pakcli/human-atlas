@@ -1,15 +1,15 @@
 # Anatomical & Scientific Analysis: Why the Female Reproductive Model Looks Incomplete / Discontinuous
 
-**File:** `brief/v06_why_the_reproductive_female_model_is_not_complete.md`  
+**File:** `brief/v06_why-the-reproductive-female-model-is-incomplete.md`  
 **Target Repo:** https://github.com/pakcli/human-atlas  
 **Reference Asset:** HuBMAP / Human Reference Atlas (HRA) *3D Reference Organ Set for Female v1.5*
 
 ---
 
-## 1. Visual Analysis of the Uploaded Render
+## 1. Visual Analysis of the Two Uploaded Renders
 
-The isolated render shows what appears to be a "winged" or "flower-petal" shaped structure with thin dangling strands and a central pear-shaped organ. 
-
+### Render 1: Isolated Reproductive Organs (The "Flower Petal" View)
+When the reproductive system is isolated without surrounding anatomy, it appears as winged sheets with central nodules:
 ```
                  [Fallopian Tube & Fimbriae]
                         \       /
@@ -20,55 +20,51 @@ The isolated render shows what appears to be a "winged" or "flower-petal" shaped
                              |
                       [Vaginal Canal]
 ```
-
-### What You Are Actually Seeing:
-1. **The Central Pear:** The **Uterine Corpus** (body of the uterus) and **Cervix**.
-2. **The Long Arching Tubes:** The **Fallopian Tubes (Uterine Tubes)** terminating in finger-like **Fimbriae**.
-3. **The Paired Oval Nodules:** The **Ovaries** positioned lateral to the uterine body.
-4. **The Wide "Wing/Petal" Sheets:** The **Broad Ligament of the Uterus (*Ligamentum latum uteri*)**, including the mesometrium, mesosalpinx, and mesovarium.
-5. **The Long Strands:** The **Round Ligaments (*Ligamentum teres uteri*)** and ovarian suspensory vessels tracking toward the pelvic brim.
+* **Uterine Corpus & Cervix:** The central pear-shaped organ.
+* **Fallopian Tubes & Fimbriae:** Delicate conduits leading to the ovaries.
+* **Broad Ligament (*Ligamentum latum uteri*):** The wide peritoneal folds that look like "wings" or "flower petals" when viewed without the pelvic side walls.
 
 ---
 
-## 2. Why Does It Look Discontinuous or "Incomplete"?
-
-There are three major anatomical and dataset reasons:
-
-### Reason 1: The Broad Ligament in Isolation
-In real human anatomy, the uterus and ovaries are draped in a continuous double-fold of peritoneum (the broad ligament). In a living body, this sheet is pinned securely against the pelvic side walls, bladder, and rectum, surrounded by pelvic adipose tissue.
-* In the 3D model, when all surrounding organs (bladder, rectum, pelvic bones, fat) are hidden or isolated, **the broad ligament appears like floating wings or paper flaps**.
-
----
-
-### Reason 2: Research Dataset Scope (HuBMAP HRA vs. BodyParts3D)
-* **Male Dataset (BodyParts3D):**
-  * Derived from a full-body cadaveric MRI scan (TARO).
-  * Every structure—from the pubic bones to the levator ani muscles, ischiocavernosus, bulbospongiosus, and fat pads—was converted into closed solid meshes.
-* **Female Dataset (HuBMAP / HRA v1.5):**
-  * Created by the **NIH HuBMAP Consortium** (Human BioMolecular Atlas Program) specifically for **single-cell genomics and organ mapping**.
-  * Scientists required precise reference boundaries for tissue biopsies (e.g., endometrium, ovarian cortex, placenta).
-  * It was **never built as a continuous cadaveric musculoskeletal dissection**. Pelvic floor muscles (levator ani, coccygeus) and deep perineal muscles are omitted from HuBMAP v1.5.
+### Render 2: Pelvic View with Bones (The Second Screenshot)
+The second screenshot shows the pelvic cavity looking from beneath/in front:
+* **The Pelvic Bones:** Left and right hip bones (ilium, ischium, pubis, and the circular obturator foramen).
+* **The Pubic Gap:** There is an empty space between the left and right pubic bones because the cartilaginous **pubic symphysis disc** was omitted in the HRA reference skeleton.
+* **The Hanging Vaginal Canal:** The lower end of the vagina and bladder neck protrude downwards through the pelvic outlet in midair.
+* **What is Visibly Missing Here:**
+  1. **The Pelvic Floor Muscles (*Diaphragma pelvis*):** The *Levator ani* (puborectalis, pubococcygeus, iliococcygeus) and *Coccygeus* muscles, which form a hammock closing the pelvic bottom, are **0% present**.
+  2. **External Genitalia (Vulva):** In front of the pubic arch, where the *mons pubis*, *clitoris*, and *labia majora/minora* should be, there are no discrete organ meshes.
 
 ---
 
-### Reason 3: External Genitalia Are Baked into the Body Surface
-* The external female genitalia (clitoris, labia majora, labia minora, and vaginal vestibule) **are not modeled as separate internal organ meshes**.
-* Instead, they are sculpted into the **Integumentary layer (outer skin surface)**.
-* When you hide the body surface and look only at the reproductive layer, the lower end of the vagina appears as an open tube suspended in space without the outer vulval structures.
+## 2. The Core Scientific Reasons
+
+| Component | In Living Anatomy | In HuBMAP HRA Female v1.5 Dataset | Why It Looks Incomplete |
+| :--- | :--- | :--- | :--- |
+| **Pelvic Floor** | Solid muscular hammock (*levator ani*) supporting the vagina & rectum | Omitted completely (not segmented) | Vagina appears to hang downward into empty void |
+| **Pubic Joint** | Fibrocartilage disc (*pubic symphysis*) connecting pubic bones | Joint disc omitted | Left and right hip bones have an unnatural gap |
+| **Broad Ligament** | Pressed flat against pelvic side walls by internal organs and fat | Freely suspended double-layer sheet | Looks like floating "wings" or "petals" |
+| **External Vulva** | Discrete external genitalia with erectile clitoral bodies | Baked into the outer skin (`VH_F_skin`) | No separate selectable organ meshes for clitoris or labia |
 
 ---
 
-## 3. How to Improve the UI/UX & Visualization
+## 3. What Exists and Needs Fixing in `atlas-female.json`
 
-To make this look professional, educational, and natural to users:
+Although the pelvic floor muscles are missing from the source dataset, **38 actual internal female reproductive structures exist in the model right now**. 
 
-1. **Keep Body Surface Semi-Transparent in Female View:**
-   * By default in Female mode, keep the `integumentary` (body surface) layer visible with `opacity: 0.1`–`0.15`.
-   * This provides the necessary pelvic silhouette so users immediately see that the uterus, ovaries, and broad ligament are sitting inside the lower pelvic bowl.
-2. **Individual Part Selection vs. Group Isolation:**
-   * When inspecting, encourage selecting the **Uterus** (`uterus`) or **Ovary** (`ovary`) directly rather than isolating all 30+ ligamentous pieces at once. Selecting just the Uterus reveals its clean, classic anatomical form.
-3. **Transparent Anatomical Notes:**
-   * In the detail sheet for the broad ligament or female reproductive system, include a brief educational note:
-     > *"The broad ligament forms a wide peritoneal fold that anchors the uterus to the lateral pelvic walls in vivo."*
-4. **Future Roadmap Option:**
-   * If complete muscular pelvic floor fidelity is desired in a future version, supplement the HuBMAP organs with open-access pelvic musculoskeletal meshes (e.g. from Z-Anatomy or BodyParts3D female donor data when available).
+However, two parts in the raw source had broken unassigned names:
+1. `VH_F_cervicovaginal_junction` was labeled `'-'` ➔ **Fix: Label as "Cervicovaginal junction"**
+2. `VH_F_cornua` was labeled `'-'` ➔ **Fix: Label as "Uterine cornu"**
+
+Fixing these ensures that **every modeled piece of the female reproductive tract is 100% indexed, selectable, and medically described**.
+
+---
+
+## 4. UI/UX Strategy to Prevent the "Floating / Broken" Perception
+
+1. **Keep Body Surface Transparent (Not Hidden):**
+   * Keeping `integumentary` (body surface skin) visible at ~10% opacity provides the outer silhouette of the hips, mons pubis, and thighs. This gives users immediate spatial grounding.
+2. **Preset "Pelvic Organs" View:**
+   * Instead of isolating the reproductive system in black/white space, show it alongside the pelvic bones and urinary bladder so users see how the organs fit inside the pelvic basin.
+3. **Transparent Scientific Disclosure in UI:**
+   * Clearly state in the about sheet that HuBMAP HRA is an **Organ Reference Set** (focusing on internal organs and biopsy mapping), rather than a continuous full-muscle cadaver dissection.
