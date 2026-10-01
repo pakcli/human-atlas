@@ -63,7 +63,12 @@ export default function Home(){
   setAtlas(null);
   setChosen(null);
   setDetails(false);
-  setState({...initial,visible:sex==='female'?[...DEFAULT_VISIBLE,'integumentary']:DEFAULT_VISIBLE});
+  setState(prev=>({
+   ...prev,
+   selected:[],
+   isolate:false,
+   reset:prev.reset+1,
+  }));
   const modelUrl=sex==='female'?'/models/atlas-female.json':'/models/atlas.json';
   fetch(modelUrl,{signal:abort.signal})
    .then(r=>{if(!r.ok)throw new Error('The anatomy catalogue could not be loaded.');return r.json();})
@@ -202,6 +207,16 @@ export default function Home(){
   </header>
 
   <nav className="top-actions" aria-label="Explorer panels">
+   <Button
+    variant="ghost"
+    className="icon-button theme-toggle"
+    aria-label={theme==='dark'?'Switch to light mode':'Switch to dark mode'}
+    title={theme==='dark'?'Light mode':'Dark mode (darkgray)'}
+    onClick={toggleTheme}
+    style={{cursor:'pointer'}}
+   >
+    {theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}
+   </Button>
    <Button variant="ghost" className={panel==='search'?'active':''} onClick={()=>openPanel('search')} aria-label="Search anatomy">
     <Search size={18}/><span>Find a structure</span><kbd>/</kbd>
    </Button>
