@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const filename=process.argv[2]??'atlas.json',female=filename.includes('female');
 const base=new URL('../public/models/',import.meta.url),atlas=JSON.parse(fs.readFileSync(new URL(filename,base)));
-assert.equal(atlas.parts.length,female?888:2234);assert.equal(atlas.concepts.length,female?1073:3432);
-const ids=new Set(atlas.parts.map(p=>p.id));assert.equal(ids.size,female?888:2234);
+assert.equal(atlas.parts.length,female?890:2234);assert.equal(atlas.concepts.length,female?1076:3432);
+const ids=new Set(atlas.parts.map(p=>p.id));assert.equal(ids.size,female?890:2234);
 const files=atlas.chunks.map(c=>{const b=fs.readFileSync(new URL(c.url.split('/').pop(),base));assert.equal(b.length,c.bytes);return b;});
 if(female){assert.equal(atlas.parts.filter(p=>p.system==='pregnancy').length,8);for(const label of ['uterus','ovary','vagina'])assert.ok(atlas.parts.some(p=>p.name.toLowerCase().includes(label)));assert.ok(!atlas.parts.some(p=>/prostate|testis|penis/i.test(p.name)));}
 let tris=0;

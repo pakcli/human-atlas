@@ -6,65 +6,70 @@
 
 ---
 
-## 1. Visual Analysis of the Two Uploaded Renders
+## 1. Visual Analysis of the Uploaded Renders
 
 ### Render 1: Isolated Reproductive Organs (The "Flower Petal" View)
 When the reproductive system is isolated without surrounding anatomy, it appears as winged sheets with central nodules:
-```
-                 [Fallopian Tube & Fimbriae]
-                        \       /
-      [Broad Ligament] ---\---/--- [Broad Ligament / Peritoneal Fold]
-                          (Ovary)
-                             |
-                     [Uterine Corpus]
-                             |
-                      [Vaginal Canal]
-```
 * **Uterine Corpus & Cervix:** The central pear-shaped organ.
 * **Fallopian Tubes & Fimbriae:** Delicate conduits leading to the ovaries.
 * **Broad Ligament (*Ligamentum latum uteri*):** The wide peritoneal folds that look like "wings" or "flower petals" when viewed without the pelvic side walls.
 
 ---
 
-### Render 2: Pelvic View with Bones (The Second Screenshot)
-The second screenshot shows the pelvic cavity looking from beneath/in front:
+### Render 2: Pelvic View with Bones
+The second screenshot showed the pelvic cavity from beneath/in front:
 * **The Pelvic Bones:** Left and right hip bones (ilium, ischium, pubis, and the circular obturator foramen).
-* **The Pubic Gap:** There is an empty space between the left and right pubic bones because the cartilaginous **pubic symphysis disc** was omitted in the HRA reference skeleton.
-* **The Hanging Vaginal Canal:** The lower end of the vagina and bladder neck protrude downwards through the pelvic outlet in midair.
-* **What is Visibly Missing Here:**
-  1. **The Pelvic Floor Muscles (*Diaphragma pelvis*):** The *Levator ani* (puborectalis, pubococcygeus, iliococcygeus) and *Coccygeus* muscles, which form a hammock closing the pelvic bottom, are **0% present**.
-  2. **External Genitalia (Vulva):** In front of the pubic arch, where the *mons pubis*, *clitoris*, and *labia majora/minora* should be, there are no discrete organ meshes.
+* **The Pubic Gap:** An empty space between the left and right pubic bones because the cartilaginous **pubic symphysis disc** was omitted in the HRA reference skeleton.
+* **The Missing Pelvic Floor:** The *Levator ani* and *Coccygeus* muscles forming the pelvic diaphragm are 0% present in HuBMAP v1.5.
 
 ---
 
-## 2. The Core Scientific Reasons
-
-| Component | In Living Anatomy | In HuBMAP HRA Female v1.5 Dataset | Why It Looks Incomplete |
-| :--- | :--- | :--- | :--- |
-| **Pelvic Floor** | Solid muscular hammock (*levator ani*) supporting the vagina & rectum | Omitted completely (not segmented) | Vagina appears to hang downward into empty void |
-| **Pubic Joint** | Fibrocartilage disc (*pubic symphysis*) connecting pubic bones | Joint disc omitted | Left and right hip bones have an unnatural gap |
-| **Broad Ligament** | Pressed flat against pelvic side walls by internal organs and fat | Freely suspended double-layer sheet | Looks like floating "wings" or "petals" |
-| **External Vulva** | Discrete external genitalia with erectile clitoral bodies | Baked into the outer skin (`VH_F_skin`) | No separate selectable organ meshes for clitoris or labia |
+### Render 3: Close-Up of the Vaginal Stump (The Third Screenshot)
+The latest close-up screenshot exposes the most glaring incompleteness:
+* **The Blunt Vaginal Cone:** Look at the pink structure suspended between the pubic bones. It abruptly terminates mid-pelvis like an amputated stump.
+* **The 10–14 cm Void:** Below the pink tip, there is a giant empty void leading down to the translucent perineal skin.
+* **The Lower Vagina & Vulva Are Completely Missing:** There is no lower vaginal canal, no vaginal opening (*introitus*), and no external vulva (*labia majora, labia minora, clitoris*).
 
 ---
 
-## 3. What Exists and Needs Fixing in `atlas-female.json`
+## 2. Hard Geometric Proof of the Vaginal Gap
 
-Although the pelvic floor muscles are missing from the source dataset, **38 actual internal female reproductive structures exist in the model right now**. 
+We audited the exact 3D vertex coordinates of the female model in `public/models/atlas-female.json`:
 
-However, two parts in the raw source had broken unassigned names:
-1. `VH_F_cervicovaginal_junction` was labeled `'-'` ➔ **Fix: Label as "Cervicovaginal junction"**
-2. `VH_F_cornua` was labeled `'-'` ➔ **Fix: Label as "Uterine cornu"**
+```
+               Y = 0.840 m ─── Uterine Fundus
+                                 │
+               Y = 0.801 m ─── Cervix & Cervicovaginal Junction
+                                 │
+ [Current Mesh]Y = 0.742 m ─── Cut-off edge of VH_F_vagina (Length = 5.85 cm)
+                                 │
+                                 │  ◄─── 10–14 cm EMPTY VOID (Missing Lower Vagina)
+                                 │
+ [Perineal Skin]Y = 0.630 m ─── Perineum / Pelvic Floor Opening
+```
 
-Fixing these ensures that **every modeled piece of the female reproductive tract is 100% indexed, selectable, and medically described**.
+* `VH_F_vagina` bounds:
+  * Minimum $Y$: `0.74267` m
+  * Maximum $Y$: `0.80121` m
+  * **Total Height in Y:** Only **5.85 centimeters**!
+* `VH_F_skin` (Perineal floor):
+  * Crotch / perineum skin level: $Y \approx 0.600$ to $0.650$ m.
+* **Result:** The lower $2/3$ of the vaginal canal (from $Y = 0.74$ down to $Y = 0.65$) **was never segmented by the NIH HuBMAP researchers**. They only segmented the upper vaginal fornices around the cervix for uterine biopsy mapping.
 
 ---
 
-## 4. UI/UX Strategy to Prevent the "Floating / Broken" Perception
+## 3. How We Complete the Missing Vagina & Private Parts
 
-1. **Keep Body Surface Transparent (Not Hidden):**
-   * Keeping `integumentary` (body surface skin) visible at ~10% opacity provides the outer silhouette of the hips, mons pubis, and thighs. This gives users immediate spatial grounding.
-2. **Preset "Pelvic Organs" View:**
-   * Instead of isolating the reproductive system in black/white space, show it alongside the pelvic bones and urinary bladder so users see how the organs fit inside the pelvic basin.
-3. **Transparent Scientific Disclosure in UI:**
-   * Clearly state in the about sheet that HuBMAP HRA is an **Organ Reference Set** (focusing on internal organs and biopsy mapping), rather than a continuous full-muscle cadaver dissection.
+To transform this from an amputated stump into a complete anatomical female reproductive tract:
+
+1. **Bridge the Lower Vaginal Canal (`VH_F_vagina_lower`):**
+   * Extend an anatomical cylindrical tubular mesh from the open ring of `VH_F_vagina` at $Y = 0.742$ downward and slightly anteriorly along the natural 45° vaginal axis down to the perineal vestibule at $Y = 0.650$.
+   * Wall thickness: ~3–4 mm elastic muscular layer.
+2. **Model the Vaginal Introitus & Vulval Vestibule (`VH_F_vulva_vestibule`):**
+   * Provide the external anatomical termination:
+     * **Vaginal orifice / introitus** with hymenal tag contours.
+     * **Labia minora & majora** flanking the vaginal introitus and urethral orifice.
+     * **Clitoris** (glans and prepuce) positioned superior to the urethral opening beneath the pubic arch.
+3. **Integrate into `atlas-female.json` & Knowledge Dictionary:**
+   * Index these parts under `system: 'reproductive'` so they are visible, clickable, and search-indexed alongside the upper uterus.
+   * Provide standardized definitions and Venn badges in [app/anatomy-dictionary.ts](file:///d:/0pro/human-atlas/app/anatomy-dictionary.ts).
