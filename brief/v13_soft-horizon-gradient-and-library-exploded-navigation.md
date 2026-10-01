@@ -206,5 +206,39 @@ const panLibraryPlane = (dx: number, dy: number, cx: number, cy: number) => {
 
 - [x] **Anatomical Vertex Colors Untouched:** Zero changes to `SYSTEMS` colors or shaders.
 - [x] **Single-Column Vertical Command Deck Maintained:** The right panel remains a unified vertical column.
-- [x] **Inline Bottom-Left Theme Picker Maintained:** Theme selector remains anchored on the far-left of the footer.
+- [x] **Source & Credits Relocated to Left Header:** Placed cleanly between the Gender selector (`.sex-toggle-group`) and the Systems Panel (`.layers-panel`).
+- [x] **Theme Dropdown & Navigation Guide Moved to Bottom-Right:** Relocated to `.footer-right` (`bottom: 18px; right: 28px`), vacating the entire bottom-left viewport area.
+- [x] **Left Systems Panel Touches Bottom of Screen:** `.layers-panel` now extends from `top: 200px` down to `bottom: 16px` (`max-height: calc(100dvh - 216px)`), giving maximal vertical real estate to anatomical layer toggles.
+- [x] **Floor Ground Plane & Background Gradients Removed (Plain Solid Aesthetic):** Removed the 60×60 floor plane (`ground`), procedural alpha map, fog, and HTML vignette gradient. The 3D scene now renders on a pure, clean solid background (`bgCanvas`) with the circular podium (`platform` + rings) grounding the anatomical model.
+- [x] **Instant Inspection Dot & UI Toggle Propagation:** Toggling the blue inspection dot (or any system/theme/switch) immediately triggers an on-demand frame render (`dirty = true`) via `triggerRenderRef` and direct visibility diffing, eliminating any need to drag or orbit the 3D viewport.
 - [x] **Zero Linter or Type Errors:** Verified via `npm run check` and `npm run build`.
+
+---
+
+## 8. Whole Screen Layout Reorganization & Solid Studio Aesthetic
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ [Title: Human Atlas 3D]                    [Search / Actions]│
+│ [Modeled pieces count]                                       │
+│ [ ♂ Male ]  [ ♀ Female ]                                     │
+│ [Source & credits ↗]                                         │
+│                                                              │
+│ ┌────────────────────────┐         ┌───────┐                 │
+│ │ SYSTEMS PANEL          │         │ 3D    │                 │
+│ │ • Skeletal             │         │ DECK  │                 │
+│ │ • Muscular             │  (Plain │       │                 │
+│ │ • Nervous              │  Solid  │   ▲   │                 │
+│ │ • Circulatory          │  Studio │   │   │                 │
+│ │ • Respiratory          │  Back-  │   │   │                 │
+│ │ • Digestive            │  ground)│  [ ]  │                 │
+│ │ • Urinary              │         │  (•)  │                 │
+│ │ • Endocrine            │         │   ↻   │                 │
+│ │ • Lymphatic            │         │ Reset │                 │
+│ │ • Reproductive         │         │   ▼   │                 │
+│ │                        │         └───────┘                 │
+│ │ (touches screen bottom)│                                   │
+│ └────────────────────────┘    [Guide text] [🎨 Theme: Navy ▲]│
+└──────────────────────────────────────────────────────────────┘
+```
+

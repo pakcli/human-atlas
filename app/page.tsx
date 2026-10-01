@@ -253,6 +253,17 @@ export default function Home(){
      <span>♀ Female</span>
     </Button>
    </div>
+   <div className="identity-source-link">
+    <button
+     type="button"
+     className="source-credits-btn"
+     onClick={()=>{setDetails(false);setPanel(null);setAbout(true);}}
+     title="View scientific sources and model attribution"
+    >
+     <span>Source & credits</span>
+     <ArrowUpRight size={11}/>
+    </button>
+   </div>
   </header>
 
   {/* Top center caption */}
@@ -504,9 +515,13 @@ export default function Home(){
    </div>
   </aside>
 
-  {/* Studio Bottom Bar: Inline Theme Dropdown on far left + Guidance + Source Link */}
+  {/* Studio Bottom Bar: Navigation Guide + Theme Dropdown on far right */}
   <footer className="studio-footer">
-   <div className="footer-left">
+   <div className="footer-right">
+    <span className="footer-guide">
+     Left-drag to orbit · Right-drag to pan · Tap to inspect
+    </span>
+
     <div className="accent-theme-picker" ref={accentPickerRef}>
      <button
       type="button"
@@ -568,16 +583,6 @@ export default function Home(){
       </div>
      )}
     </div>
-
-    <span className="footer-guide">
-     Left-drag to orbit · Right-drag to pan · Tap to inspect
-    </span>
-   </div>
-
-   <div className="footer-right">
-    <Button variant="ghost" onClick={()=>{setDetails(false);setPanel(null);setAbout(true);}}>
-     Source & credits <ArrowUpRight size={12}/>
-    </Button>
    </div>
   </footer>
 

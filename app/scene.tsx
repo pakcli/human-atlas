@@ -13,9 +13,14 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
  const latestTheme=useRef(theme);latestTheme.current=theme;
  const host=useRef<HTMLDivElement>(null),latest=useRef(state),select=useRef(onSelect);
  latest.current=state;select.current=onSelect;
+ const triggerRenderRef=useRef<()=>void>(()=>{});
+ useEffect(()=>{
+  triggerRenderRef.current();
+ },[state,theme]);
  useEffect(()=>{
   const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView='',lastReset=-1,lastIsolate='',layoutKey='',amount=latest.current.explode;
   let lastState:SceneState|null=null,lastThemeKey='';
+  triggerRenderRef.current=()=>{dirty=true;};
   const abort=new AbortController();
   let renderer:T.WebGLRenderer;
   try{renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});}catch{onError('This browser could not start the 3D viewer. Please try a browser with WebGL enabled.');return;}
@@ -32,26 +37,6 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   scene.add(new T.HemisphereLight(0xffffff,0xa7acb2,1.05));
   const key=new T.DirectionalLight(0xfffaf4,2.3);key.position.set(-2,4,3);scene.add(key);
   const rim=new T.DirectionalLight(0xe9f0ff,1.8);rim.position.set(2,2,-3);scene.add(rim);
-  const groundAlphaTexture=(()=>{
-   const size=256,canvas=document.createElement('canvas');
-   canvas.width=canvas.height=size;
-   const ctx=canvas.getContext('2d')!;
-   const center=size/2;
-   const grad=ctx.createRadialGradient(center,center,center*0.12,center,center,center*0.96);
-   grad.addColorStop(0.0,'rgba(255,255,255,1.0)');
-   grad.addColorStop(0.35,'rgba(255,255,255,0.75)');
-   grad.addColorStop(0.7,'rgba(255,255,255,0.22)');
-   grad.addColorStop(1.0,'rgba(255,255,255,0.0)');
-   ctx.fillStyle=grad;
-   ctx.fillRect(0,0,size,size);
-   const tex=new T.CanvasTexture(canvas);
-   tex.wrapS=tex.wrapT=T.ClampToEdgeWrapping;
-   tex.needsUpdate=true;
-   return tex;
-  })();
-  const groundMat=new T.MeshStandardMaterial({color:initPalette.bgGround,roughness:1,transparent:true,alphaMap:groundAlphaTexture,depthWrite:false});
-  const ground=new T.Mesh(new T.CircleGeometry(26,96),groundMat);ground.rotation.x=-Math.PI/2;ground.position.y=-.019;scene.add(ground);
-  scene.fog=new T.FogExp2(initPalette.bgCanvas,0.035);
   const platform=new T.Mesh(new T.CylinderGeometry(.68,.7,.028,100),new T.MeshStandardMaterial({color:initPalette.bgPlatform,metalness:.12,roughness:.67}));platform.position.y=-.016;scene.add(platform);
   const ring=new T.Mesh(new T.RingGeometry(.63,.632,128),new T.MeshBasicMaterial({color:initPalette.ringOuter,transparent:true,opacity:.4,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.001;scene.add(ring);
   const innerRing=new T.Mesh(new T.RingGeometry(.55,.551,128),new T.MeshBasicMaterial({color:initPalette.ringInner,transparent:true,opacity:.16,side:T.DoubleSide}));innerRing.rotation.x=-Math.PI/2;innerRing.position.y=.001;scene.add(innerRing);
@@ -342,8 +327,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
     if(themeKey!==lastThemeKey){
      lastThemeKey=themeKey;
      const p=getThemePalette(s.accentTheme??'navy_blue',latestTheme.current,s.customAccentColor??'#38bdf8');
-     renderer.setClearColor(p.bgCanvas);if(scene.fog)scene.fog.color.set(p.bgCanvas);
-     (ground.material as T.MeshStandardMaterial).color.set(p.bgGround);
+     renderer.setClearColor(p.bgCanvas);
      (platform.material as T.MeshStandardMaterial).color.set(p.bgPlatform);
      (ring.material as T.MeshBasicMaterial).color.set(p.ringOuter);
      (innerRing.material as T.MeshBasicMaterial).color.set(p.ringInner);
@@ -400,12 +384,30 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
     lastIsolate=isolateKey;
    }
    if(amount>.4&&!s.isolate)controls.target.z=0;
-   controls.enableRotate=true;controls.enablePan=true;ground.visible=platform.visible=ring.visible=innerRing.visible=amount<.5&&!s.isolate;markers.visible=amount>.75&&(s.showDots??true);controls.autoRotate=s.rotate&&!s.isolate&&amount<.4;controls.autoRotateSpeed=.65;controls.update();if(controls.autoRotate)dirty=true;
+   controls.enableRotate=true;controls.enablePan=true;
+   const nextPlatform=amount<.5&&!s.isolate;
+   if(platform.visible!==nextPlatform){
+    platform.visible=ring.visible=innerRing.visible=nextPlatform;
+    dirty=true;
+   }
+   const nextDots=amount>.75&&(s.showDots??true);
+   if(markers.visible!==nextDots){
+    markers.visible=nextDots;
+    dirty=true;
+   }
+   if(lastState!==s){
+    dirty=true;
+    lastState=s;
+   }
+   controls.autoRotate=s.rotate&&!s.isolate&&amount<.4;
+   controls.autoRotateSpeed=.65;
+   controls.update();
+   if(controls.autoRotate)dirty=true;
    if(dirty){renderer.render(scene,camera);targets=[];if(amount>.45){const hasSolid=atlas.parts.some((p,i)=>p.system!=='integumentary'&&data[i*4+3]>.5);atlas.parts.forEach((p,i)=>{if(data[i*4+3]<.5||(hasSolid&&p.system==='integumentary'))return;let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;for(let corner=0;corner<8;corner++){projected.set(p.bounds[(corner&1)?1:0][0]+data[i*4],p.bounds[(corner&2)?1:0][1]+data[i*4+1],p.bounds[(corner&4)?1:0][2]+data[i*4+2]).project(camera);const x=(projected.x+1)*el.clientWidth/2,y=(1-projected.y)*el.clientHeight/2;left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}projected.copy(centers[i]).add(new T.Vector3(data[i*4],data[i*4+1],data[i*4+2])).project(camera);if(projected.z< -1||projected.z>1)return;targets.push({index:i,x:(projected.x+1)*el.clientWidth/2,y:(1-projected.y)*el.clientHeight/2,left,right,top,bottom});});}dirty=false;}
 
   };animate();
   const contextLost=(e:Event)=>{e.preventDefault();onError('The 3D session was paused by your device. Reload to continue.');};renderer.domElement.addEventListener('webglcontextlost',contextLost);
-  return()=>{disposed=true;abort.abort();cancelAnimationFrame(frame);window.removeEventListener('atlas-mesh-tune',handleTune);window.removeEventListener('atlas-camera-snap',handleSnap);observer.disconnect();controls.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());scene.traverse(o=>{if(o instanceof T.Mesh&&!geometries.includes(o.geometry)){o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>m.dispose());}});env.dispose();partTexture.dispose();selectionTexture.dispose();markerGeometry.dispose();groundAlphaTexture.dispose();markerMaterial.dispose();hover.remove();renderer.domElement.removeEventListener('pointerdown',down,{capture:true} as never);renderer.domElement.removeEventListener('pointermove',move,{capture:true} as never);renderer.domElement.removeEventListener('pointerup',up,{capture:true} as never);renderer.domElement.removeEventListener('pointercancel',cancel,{capture:true} as never);renderer.domElement.removeEventListener('contextmenu',preventMenu);renderer.dispose();renderer.domElement.remove();};
+  return()=>{disposed=true;abort.abort();cancelAnimationFrame(frame);window.removeEventListener('atlas-mesh-tune',handleTune);window.removeEventListener('atlas-camera-snap',handleSnap);observer.disconnect();controls.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());scene.traverse(o=>{if(o instanceof T.Mesh&&!geometries.includes(o.geometry)){o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>m.dispose());}});env.dispose();partTexture.dispose();selectionTexture.dispose();markerGeometry.dispose();markerMaterial.dispose();hover.remove();renderer.domElement.removeEventListener('pointerdown',down,{capture:true} as never);renderer.domElement.removeEventListener('pointermove',move,{capture:true} as never);renderer.domElement.removeEventListener('pointerup',up,{capture:true} as never);renderer.domElement.removeEventListener('pointercancel',cancel,{capture:true} as never);renderer.domElement.removeEventListener('contextmenu',preventMenu);renderer.dispose();renderer.domElement.remove();};
  },[atlas]);
  return <div className="scene" ref={host}/>;
 }
