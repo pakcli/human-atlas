@@ -1,4 +1,5 @@
-export type SystemId = 'skeletal'|'muscular'|'arterial'|'venous'|'nervous'|'digestive'|'respiratory'|'urinary'|'reproductive'|'lymphatic'|'endocrine'|'integumentary'|'connective'|'sensory'|'cardiac';
+export type SystemId = 'skeletal'|'muscular'|'arterial'|'venous'|'nervous'|'digestive'|'respiratory'|'urinary'|'reproductive'|'lymphatic'|'endocrine'|'integumentary'|'connective'|'sensory'|'cardiac'|'pregnancy';
+export type AnatomySex = 'male' | 'female';
 export const SYSTEMS: {id:SystemId;name:string;color:string;description:string}[] = [
  {id:'skeletal',name:'Skeleton',color:'#e2d9ba',description:'Bones form the supporting framework of the body, protect organs, and provide attachment points for muscles. Their internal tissue also stores minerals and produces blood cells.'},
  {id:'muscular',name:'Muscles',color:'#a85b50',description:'Skeletal muscles generate movement by pulling on their attachments. Together with tendons, they move joints, stabilize posture, and produce heat.'},
@@ -12,17 +13,28 @@ export const SYSTEMS: {id:SystemId;name:string;color:string;description:string}[
  {id:'urinary',name:'Urinary',color:'#b47961',description:'The kidneys filter blood and regulate fluid, electrolyte, and acid–base balance. Urine travels through the ureters to the bladder and exits through the urethra.'},
  {id:'lymphatic',name:'Lymphatic',color:'#879f7c',description:'Lymphatic vessels return excess tissue fluid to the circulation. Lymph nodes and other lymphoid organs support immune surveillance and responses.'},
  {id:'endocrine',name:'Endocrine',color:'#c5a09a',description:'Endocrine organs release hormones into the blood to coordinate processes such as metabolism, growth, stress responses, and reproduction.'},
- {id:'reproductive',name:'Reproductive',color:'#bda098',description:'The male reproductive structures represented here contribute to sperm production, maturation, transport, and the production of sex hormones.'},
+ {id:'reproductive',name:'Reproductive',color:'#bda098',description:'Reproductive structures contribute to gamete production, transport, pregnancy, and sex hormone synthesis.'},
  {id:'integumentary',name:'Body surface',color:'#ba9b7d',description:'The body surface provides an outer anatomical reference. The integumentary system forms a protective barrier and contributes to sensation and temperature regulation.'},
+ {id:'pregnancy',name:'Pregnancy reference',color:'#b88380',description:'The placenta and umbilical cord support exchange between maternal and fetal circulations during pregnancy. These reference structures are shown separately from the default adult anatomy.'},
  {id:'connective',name:'Connective tissue',color:'#aec3bb',description:'Cartilage, ligaments, and other connective tissues support, connect, and separate structures. Their roles include stabilizing joints and distributing mechanical loads.'},
 ];
 export interface Part {id:string;name:string;conceptId:string;system:SystemId;chunk:number;positions:number;normals:number;indices:number;vertexCount:number;indexCount:number;bounds:[number[],number[]]}
 export interface Concept {id:string;name:string;elements:string[]}
-export interface Atlas {version:string;sex?:'male';source?:string;scope?:string;parts:Part[];concepts:Concept[];chunks:{url:string;bytes:number;gzip?:string;gzipBytes?:number}[];triangles:number}
+export interface Atlas {version:string;sex?:AnatomySex;source?:string;scope?:string;parts:Part[];concepts:Concept[];chunks:{url:string;bytes:number;gzip?:string;gzipBytes?:number}[];triangles:number}
 export type View = 'three-quarter'|'front'|'back'|'side';
 export interface SceneState {inspectorOpen?:boolean;explode:number;visible:SystemId[];selected:string[];isolate:boolean;view:View;rotate:boolean;reset:number}
 export const DEFAULT_VISIBLE:SystemId[] = ['cardiac','sensory','skeletal','muscular','arterial','venous','nervous','respiratory','digestive','urinary','lymphatic','endocrine','reproductive','connective'];
 export const EXPLANATIONS:Record<string,string> = {
+ 'uterus':'A hollow, muscular organ in the pelvis that supports embryonic and fetal development, menstruation, and pregnancy.',
+ 'ovary':'The female gonad that produces oocytes (egg cells) and endocrine sex hormones including estrogen and progesterone.',
+ 'vagina':'An elastic muscular canal extending from the cervix of the uterus to the vulva, facilitating menstruation and forming the birth canal.',
+ 'uterine tube':'Paired conduits (Fallopian tubes) that transport ova from the ovaries to the uterus and serve as the typical site of fertilization.',
+ 'cervix':'The lower cylindrical portion of the uterus extending into the vagina.',
+ 'placenta':'A vascular organ facilitating nutrient, oxygen, and waste exchange between maternal and fetal blood supplies during pregnancy.',
+ 'umbilical cord':'The flexible cord connecting the fetus to the placenta, carrying two umbilical arteries and one umbilical vein.',
+ 'testis':'The male gonad situated in the scrotum that produces sperm and secretes testosterone.',
+ 'prostate':'A walnut-sized male exocrine gland beneath the bladder that secretes fluid nourishing and protecting sperm.',
+ 'epididymis':'A coiled duct on the posterior aspect of each testis that stores and matures sperm.',
  'heart':'A muscular pump in the chest. Its right side sends blood to the lungs; its left side sends blood through the systemic circulation.',
  'liver':'A large organ beneath the right side of the diaphragm. It processes absorbed nutrients, produces bile, and synthesizes many proteins carried in the blood.',
  'brain':'The central organ of the nervous system. Its interconnected regions support perception, movement, memory, language, and the regulation of bodily functions.',
@@ -33,4 +45,6 @@ export const EXPLANATIONS:Record<string,string> = {
  'trachea':'The main airway connecting the larynx to the bronchi. Its cartilage supports keep the airway open during breathing.',
  'diaphragm':'A broad muscle separating the chest and abdomen. When it contracts, it increases chest volume and helps draw air into the lungs.',
 };
-export function explanation(name:string,system:SystemId){return EXPLANATIONS[name.toLowerCase()] ?? SYSTEMS.find(s=>s.id===system)?.description ?? '';}
+export function explanation(name:string,system:SystemId,sex?:AnatomySex){
+ return EXPLANATIONS[name.toLowerCase()] ?? SYSTEMS.find(s=>s.id===system)?.description ?? '';
+}
