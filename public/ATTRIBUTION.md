@@ -27,3 +27,13 @@ The female reference anatomy is adapted from: Kristen Browne and Heidi Schlehlei
 Adaptations: translated native meter/Y-up coordinates onto the stage, coincident vertices welded and source normals averaged, geometry simplified with a 0.2% per-structure relative error bound, and normals quantized. Colors and display systems are curated for this interface. All 888 source meshes are represented, with 1,073 source nodes available as selectable individual or compound concepts.
 
 This is a reference assembly with whole-body surface and selected organs, including female reproductive anatomy. Its skeleton and muscle coverage is partial. It is not a complete model of every human structure or a single-person scan. Eight placenta/umbilical structures are classified under Pregnancy reference and hidden by default.
+
+### Female Reproductive Organs (Cross-Section & Vaginal Canal)
+
+The continuous vaginal canal and uterine cross-section geometry is adapted from:
+- **Title:** *Female Reproductive Organs - X Section*
+- **Author:** CVallance (https://sketchfab.com/cvallance01)
+- **Source:** https://sketchfab.com/3d-models/female-reproductive-organs-x-section-6c89dc45574c40b3981e8de6310d28d4
+- **License:** Creative Commons Attribution 4.0 International (CC BY 4.0) (http://creativecommons.org/licenses/by/4.0/)
+- **Adaptations:** Scaled and aligned to standard female pelvic coordinate space ($Y = 0.637$ to $0.839\text{ m}$), normals normalized and packed into GPU 16-bit format, segmented into anatomical concept buffers.
+

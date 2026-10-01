@@ -91,9 +91,10 @@ Update `public/ATTRIBUTION.md` with:
 ---
 
 ## 4. Verification & Validation Checklist
-- [ ] Asset placed in `raw/` directory.
-- [ ] Conversion script executes with 0 errors.
-- [ ] Bounding box matches female pelvic inlet and perineal outlet.
-- [ ] `node scripts/validate-atlas.mjs` passes all mesh and buffer assertions.
-- [ ] `npm run check` and `npm run build` succeed cleanly.
-- [ ] Visual verification at `http://localhost:3016` shows natural anatomical alignment.
+- [x] Asset placed in `raw/` directory.
+- [x] Conversion script executes with 0 errors (`scripts/import-sketchfab-vagina.mjs`).
+- [x] Bounding box matches female pelvic inlet and perineal outlet ($Y = 0.637$ to $0.839\text{ m}$).
+- [x] `node scripts/validate-atlas.mjs` passes all mesh and buffer assertions.
+- [x] `npm run check` and `npm run build` succeed cleanly.
+- [x] Attribution added to `public/ATTRIBUTION.md`.
+- [x] Educational definitions updated in `app/anatomy-dictionary.ts`.
