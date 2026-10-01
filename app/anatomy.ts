@@ -54,6 +54,8 @@ export interface SceneState {
   opacities?: Partial<Record<SystemId, number>>;
   accentTheme?: AccentThemeId;
   customAccentColor?: string;
+  cameraPos?: [number, number, number];
+  cameraTarget?: [number, number, number];
 }
 export const DEFAULT_VISIBLE:SystemId[] = ['cardiac','sensory','skeletal','muscular','arterial','venous','nervous','respiratory','digestive','urinary','lymphatic','endocrine','reproductive','connective'];
 export const EXPLANATIONS:Record<string,string> = {

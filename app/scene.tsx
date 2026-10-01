@@ -28,11 +28,24 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   renderer.setPixelRatio(Math.min(devicePixelRatio,innerWidth<768?1.5:2));renderer.setClearColor(initPalette.bgCanvas);renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;el.appendChild(renderer.domElement);
   renderer.domElement.setAttribute('aria-label','Interactive human anatomy. Drag to orbit, pinch or scroll to zoom, and tap a structure to inspect it.');
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(34,1,.005,100),controls=new OrbitControls(camera,renderer.domElement);
-  camera.position.set(1.32,1.08,3.77);controls.target.set(0,.86,0);controls.enableDamping=true;controls.dampingFactor=.085;controls.minDistance=.07;controls.maxDistance=40;controls.maxPolarAngle=Math.PI*.96;
+  if(latest.current.cameraPos && latest.current.cameraTarget){
+   camera.position.set(latest.current.cameraPos[0],latest.current.cameraPos[1],latest.current.cameraPos[2]);
+   controls.target.set(latest.current.cameraTarget[0],latest.current.cameraTarget[1],latest.current.cameraTarget[2]);
+  }else{
+   camera.position.set(1.32,1.08,3.77);controls.target.set(0,.86,0);
+  }
+  controls.enableDamping=true;controls.dampingFactor=.085;controls.minDistance=.07;controls.maxDistance=40;controls.maxPolarAngle=Math.PI*.96;
   controls.screenSpacePanning=true;controls.enablePan=true;controls.enableRotate=true;
   controls.mouseButtons={LEFT:T.MOUSE.ROTATE,MIDDLE:T.MOUSE.DOLLY,RIGHT:T.MOUSE.PAN};
   controls.touches={ONE:T.TOUCH.ROTATE,TWO:T.TOUCH.DOLLY_PAN};
-  controls.addEventListener('change',()=>{dirty=true;});
+  const syncCam=()=>{
+   (window as unknown as {__atlas_camera?:{pos:[number,number,number];target:[number,number,number]}}).__atlas_camera={
+    pos:[parseFloat(camera.position.x.toFixed(2)),parseFloat(camera.position.y.toFixed(2)),parseFloat(camera.position.z.toFixed(2))],
+    target:[parseFloat(controls.target.x.toFixed(2)),parseFloat(controls.target.y.toFixed(2)),parseFloat(controls.target.z.toFixed(2))],
+   };
+  };
+  syncCam();
+  controls.addEventListener('change',()=>{dirty=true;syncCam();});
   const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment(),env=pmrem.fromScene(room,.04);scene.environment=env.texture;room.dispose();pmrem.dispose();
   scene.add(new T.HemisphereLight(0xffffff,0xa7acb2,1.05));
   const key=new T.DirectionalLight(0xfffaf4,2.3);key.position.set(-2,4,3);scene.add(key);

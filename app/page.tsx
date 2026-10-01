@@ -1,7 +1,7 @@
 import {flushSync} from 'react-dom';
 import {registerAtlasTools} from './agent-tools';
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Activity,ArrowRightLeft,ArrowUpRight,Check,ChevronDown,ChevronRight,ChevronUp,CircleDot,Focus,Info,Layers3,Moon,Pause,RotateCcw,RotateCw,Search,Sun,X} from 'lucide-react';
+import {Activity,ArrowRightLeft,ArrowUpRight,Check,ChevronDown,ChevronRight,ChevronUp,CircleDot,Focus,Info,Layers3,Moon,Pause,RotateCcw,RotateCw,Search,Share2,Sun,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Badge} from '@/components/ui/badge';
 import {Slider} from '@/components/ui/slider';
@@ -13,8 +13,9 @@ import {DEFAULT_OPACITIES,DEFAULT_VISIBLE,SYSTEMS,type AnatomySex,type Atlas,typ
 import {getVennClassification,getHomology,getStandardizedDescription} from './anatomy-dictionary';
 import {THEME_OPTIONS,getThemePalette,applyThemeToDom} from './theme-engine';
 import { ModelTuner } from './model-tuner';
+import {serializeStateToUrl,parseStateFromUrl,saveSessionToLocalStorage,loadSessionFromLocalStorage} from './url-state';
 
-const initial:SceneState={
+const defaultState:SceneState={
  explode:0,
  visible:DEFAULT_VISIBLE,
  selected:[],
@@ -28,19 +29,35 @@ const initial:SceneState={
  customAccentColor:'#38bdf8',
 };
 
+function getInitialSession():{
+ theme:'light'|'dark';
+ sex:AnatomySex;
+ state:SceneState;
+}{
+ if(typeof window==='undefined')return{theme:'light',sex:'male',state:{...defaultState}};
+ // URL takes priority → then localStorage → defaults
+ const fromUrl=parseStateFromUrl(window.location.search);
+ const fromStorage=loadSessionFromLocalStorage();
+ const merged=fromUrl??fromStorage;
+ const theme=(merged?.theme==='dark'||merged?.theme==='light')?merged.theme
+ :((localStorage.getItem('atlas_theme')==='dark')?'dark':'light');
+ const sex=(merged?.sex==='female'||merged?.sex==='male')?merged.sex:'male';
+ const state:SceneState={
+ ...defaultState,
+ ...(merged?.state??{}),
+ reset:0,
+ };
+ return{theme,sex,state};
+}
+
 export default function Home(){
  const detailTitle=useRef<HTMLHeadingElement>(null);
  const accentPickerRef=useRef<HTMLDivElement>(null);
  const [accentPickerOpen,setAccentPickerOpen]=useState(false);
  const [expandedSystems,setExpandedSystems]=useState<Set<SystemId>>(new Set(['integumentary']));
 
- const [theme,setTheme]=useState<'light'|'dark'>(()=>{
-  if(typeof window!=='undefined'){
-   const stored=localStorage.getItem('atlas_theme');
-   if(stored==='dark'||stored==='light')return stored;
-  }
-  return 'light';
- });
+ const initialSession=useRef(getInitialSession());
+ const [theme,setTheme]=useState<'light'|'dark'>(()=>initialSession.current.theme);
 
  useEffect(()=>{
   if(typeof window==='undefined')return;
@@ -50,17 +67,13 @@ export default function Home(){
 
  const toggleTheme=()=>setTheme(t=>t==='dark'?'light':'dark');
 
- const [sex,setSex]=useState<AnatomySex>(()=>{
-  if(typeof window!=='undefined'){
-   const param=new URLSearchParams(window.location.search).get('sex');
-   if(param==='female')return 'female';
-  }
-  return 'male';
- });
+ const [sex,setSex]=useState<AnatomySex>(()=>initialSession.current.sex);
 
  const [pendingTarget,setPendingTarget]=useState<string|null>(null);
  const [atlas,setAtlas]=useState<Atlas|null>(null);
- const [state,setState]=useState(initial);
+ const [state,setState]=useState<SceneState>(()=>initialSession.current.state);
+ const [copied,setCopied]=useState(false);
+ const [toastMsg,setToastMsg]=useState('');
  const [progress,setProgress]=useState(0);
  const [error,setError]=useState('');
  const [panel,setPanel]=useState<'layers'|'search'|null>(null);
@@ -74,6 +87,26 @@ export default function Home(){
   const palette=getThemePalette(state.accentTheme??'navy_blue',theme,state.customAccentColor??'#38bdf8');
   applyThemeToDom(palette);
  },[state.accentTheme,state.customAccentColor,theme]);
+
+ // Debounced auto-save to localStorage whenever state/sex/theme changes
+ useEffect(()=>{
+  const id=setTimeout(()=>{
+   const cam=(window as any).__atlas_camera as {pos:[number,number,number];target:[number,number,number]}|undefined;
+   saveSessionToLocalStorage({sex,theme,state,camera:cam});
+  },800);
+  return ()=>clearTimeout(id);
+ },[sex,theme,state]);
+
+ // If a part was restored from URL/localStorage, open details sheet once atlas loads
+ useEffect(()=>{
+  if(!atlas||state.selected.length===0)return;
+  const id=state.selected[0];
+  const p=parts.get(id);
+  if(!p||details)return;
+  setChosen({id:p.conceptId,name:p.name,elements:state.selected});
+  setDetails(true);
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[atlas]);
 
  // Close accent theme picker on outside click
  useEffect(()=>{
@@ -182,7 +215,7 @@ export default function Home(){
 
  const reset=()=>{
   setState(s=>({
-   ...initial,
+   ...defaultState,
    visible:sex==='female'?[...DEFAULT_VISIBLE,'integumentary']:DEFAULT_VISIBLE,
    reset:s.reset+1,
    opacities:{...DEFAULT_OPACITIES},
@@ -197,6 +230,20 @@ export default function Home(){
  const openPanel=(next:'layers'|'search')=>{
   setDetails(false);
   setPanel(p=>p===next?null:next);
+ };
+
+ const handleShare=()=>{
+  const cam=(window as any).__atlas_camera as {pos:[number,number,number];target:[number,number,number]}|undefined;
+  const url=serializeStateToUrl({sex,theme,state,camera:cam});
+  window.history.replaceState({},'',url);
+  navigator.clipboard.writeText(url).then(()=>{
+   setCopied(true);
+   setToastMsg('Link copied to clipboard!');
+   setTimeout(()=>{setCopied(false);setToastMsg('');},2800);
+  }).catch(()=>{
+   setToastMsg('URL updated in address bar');
+   setTimeout(()=>setToastMsg(''),2800);
+  });
  };
 
  const toggleSystemAccordion=(id:SystemId)=>{
@@ -288,10 +335,20 @@ export default function Home(){
    <Button variant="ghost" className={panel==='search'?'active':''} onClick={()=>openPanel('search')} aria-label="Search anatomy">
     <Search size={18}/><span>Find a structure</span><kbd>/</kbd>
    </Button>
+   <Button
+    variant="ghost"
+    className={`icon-button share-button${copied?' copied':''}`}
+    aria-label="Share current view"
+    title="Copy share link"
+    onClick={handleShare}
+   >
+    {copied?<Check size={18}/>:<Share2 size={18}/>}
+   </Button>
    <Button variant="ghost" className="icon-button" aria-label="About this atlas" onClick={()=>{setDetails(false);setPanel(null);setAbout(true);}}>
     <Info size={18}/>
    </Button>
   </nav>
+  {toastMsg&&<div className="share-toast" role="status">{toastMsg}</div>}
 
   {/* Systems panel (Left) */}
   <section className={`layers-panel glass ${panel==='layers'?'mobile-open':''}`} aria-label="Anatomical layers">
