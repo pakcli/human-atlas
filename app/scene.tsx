@@ -6,7 +6,8 @@ import {mergeGeometries} from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {createExplosionLayout} from './explosion-layout';
 import {decodeModelResponse} from './model-download';
 import {PointerTap} from './pointer-tap';
-import {SYSTEMS,type Atlas,type SceneState} from './anatomy';
+import {SYSTEMS,DEFAULT_OPACITIES,type Atlas,type SceneState,type SystemId} from './anatomy';
+import {getThemePalette} from './theme-engine';
 interface Props {atlas:Atlas;state:SceneState;onSelect:(id:string)=>void;onProgress:(n:number)=>void;onError:(s:string)=>void;theme?:"light"|"dark"}
 export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,theme="light"}:Props){
  const latestTheme=useRef(theme);latestTheme.current=theme;
@@ -14,11 +15,12 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
  latest.current=state;select.current=onSelect;
  useEffect(()=>{
   const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView='',lastReset=-1,lastIsolate='',layoutKey='',amount=latest.current.explode;
-  let lastState:SceneState|null=null;
+  let lastState:SceneState|null=null,lastThemeKey='';
   const abort=new AbortController();
   let renderer:T.WebGLRenderer;
   try{renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});}catch{onError('This browser could not start the 3D viewer. Please try a browser with WebGL enabled.');return;}
-  renderer.setPixelRatio(Math.min(devicePixelRatio,innerWidth<768?1.5:2));const isInitDark=latestTheme.current==='dark';renderer.setClearColor(isInitDark?'#1b1e22':'#f2f3f3');renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;el.appendChild(renderer.domElement);
+  const initPalette = getThemePalette(latest.current.accentTheme ?? 'navy_blue', latestTheme.current, latest.current.customAccentColor ?? '#38bdf8');
+  renderer.setPixelRatio(Math.min(devicePixelRatio,innerWidth<768?1.5:2));renderer.setClearColor(initPalette.bgCanvas);renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;el.appendChild(renderer.domElement);
   renderer.domElement.setAttribute('aria-label','Interactive human anatomy. Drag to orbit, pinch or scroll to zoom, and tap a structure to inspect it.');
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(34,1,.005,100),controls=new OrbitControls(camera,renderer.domElement);
   camera.position.set(1.4,1.05,3.6);controls.target.set(0,.85,0);controls.enableDamping=true;controls.dampingFactor=.085;controls.minDistance=.07;controls.maxDistance=40;controls.maxPolarAngle=Math.PI*.96;controls.addEventListener('change',()=>{dirty=true;});
@@ -26,10 +28,10 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   scene.add(new T.HemisphereLight(0xffffff,0xa7acb2,1.05));
   const key=new T.DirectionalLight(0xfffaf4,2.3);key.position.set(-2,4,3);scene.add(key);
   const rim=new T.DirectionalLight(0xe9f0ff,1.8);rim.position.set(2,2,-3);scene.add(rim);
-  const ground=new T.Mesh(new T.CircleGeometry(30,96),new T.MeshStandardMaterial({color:isInitDark?0x14171a:0xd5d9dc,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-.019;scene.add(ground);
-  const platform=new T.Mesh(new T.CylinderGeometry(.68,.7,.028,100),new T.MeshStandardMaterial({color:isInitDark?0x23272d:0xeeeeec,metalness:.12,roughness:.67}));platform.position.y=-.016;scene.add(platform);
-  const ring=new T.Mesh(new T.RingGeometry(.63,.632,128),new T.MeshBasicMaterial({color:isInitDark?0x3d454e:0x8c969f,transparent:true,opacity:.4,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.001;scene.add(ring);
-  const innerRing=new T.Mesh(new T.RingGeometry(.55,.551,128),new T.MeshBasicMaterial({color:isInitDark?0x2c333b:0xa4aeb8,transparent:true,opacity:.16,side:T.DoubleSide}));innerRing.rotation.x=-Math.PI/2;innerRing.position.y=.001;scene.add(innerRing);
+  const ground=new T.Mesh(new T.CircleGeometry(30,96),new T.MeshStandardMaterial({color:initPalette.bgGround,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-.019;scene.add(ground);
+  const platform=new T.Mesh(new T.CylinderGeometry(.68,.7,.028,100),new T.MeshStandardMaterial({color:initPalette.bgPlatform,metalness:.12,roughness:.67}));platform.position.y=-.016;scene.add(platform);
+  const ring=new T.Mesh(new T.RingGeometry(.63,.632,128),new T.MeshBasicMaterial({color:initPalette.ringOuter,transparent:true,opacity:.4,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.001;scene.add(ring);
+  const innerRing=new T.Mesh(new T.RingGeometry(.55,.551,128),new T.MeshBasicMaterial({color:initPalette.ringInner,transparent:true,opacity:.16,side:T.DoubleSide}));innerRing.rotation.x=-Math.PI/2;innerRing.position.y=.001;scene.add(innerRing);
   const width=T.MathUtils.ceilPowerOfTwo(atlas.parts.length),data=new Float32Array(width*4),partTexture=new T.DataTexture(data,width,1,T.RGBAFormat,T.FloatType);partTexture.needsUpdate=true;
   const selectedData=new Uint8Array(width*4),selectionTexture=new T.DataTexture(selectedData,width,1);selectionTexture.needsUpdate=true;
   const materials:T.Material[]=[],geometries:T.BufferGeometry[]=[],pickers:(T.Mesh|undefined)[]=[],centers=atlas.parts.map(p=>new T.Vector3().fromArray(p.bounds[0]).add(new T.Vector3().fromArray(p.bounds[1])).multiplyScalar(.5));
@@ -48,7 +50,8 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    return best;
   };
   const materialFor=(system:string)=>{
-   const m=new T.MeshStandardMaterial({color:SYSTEMS.find(s=>s.id===system)?.color??'#aebbb8',metalness:.08,roughness:.53,side:T.DoubleSide,transparent:system==='integumentary',opacity:system==='integumentary'?.75:1,depthWrite:true});
+   const defaultOp = DEFAULT_OPACITIES[system as SystemId] ?? 1.0;
+   const m=new T.MeshStandardMaterial({color:SYSTEMS.find(s=>s.id===system)?.color??'#aebbb8',metalness:.08,roughness:.53,side:T.DoubleSide,transparent:defaultOp < 0.999,opacity:defaultOp,depthWrite:defaultOp >= 0.999});
    m.onBeforeCompile=shader=>{
     shader.uniforms.partState={value:partTexture};shader.uniforms.selectionState={value:selectionTexture};shader.uniforms.stateWidth={value:width};
     shader.vertexShader='attribute float partIndex; uniform sampler2D partState; uniform sampler2D selectionState; uniform float stateWidth; varying float partVisible; varying float partSelected;\n'+shader.vertexShader;
@@ -72,12 +75,16 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   });
   uterusTex.colorSpace=T.SRGBColorSpace;
   uterusTex.flipY=false;
+  const repDefOp = DEFAULT_OPACITIES['reproductive'] ?? 1.0;
   const chunk10Material=new T.MeshStandardMaterial({
    map:uterusTex,
    color:new T.Color(0xffffff),
    roughness:.55,
    metalness:.02,
    side:T.DoubleSide,
+   transparent:repDefOp < 0.999,
+   opacity:repDefOp,
+   depthWrite:repDefOp >= 0.999,
   });
   chunk10Material.onBeforeCompile=shader=>{
    shader.uniforms.partState={value:partTexture};shader.uniforms.selectionState={value:selectionTexture};shader.uniforms.stateWidth={value:width};
@@ -142,7 +149,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
     const list=groups.get(p.system)??[];list.push(g);groups.set(p.system,list);
    });
    const isChunkFRC=chunk.url.includes('female-10.bin');
-   groups.forEach((gs,system)=>{const geometry=mergeGeometries(gs,false);if(!geometry)throw new Error('Could not assemble anatomy geometry.');geometries.push(geometry);const mesh=new T.Mesh(geometry,isChunkFRC?chunk10Material:mats.get(system as never));mesh.frustumCulled=false;if(isChunkFRC){tunerGroup.add(mesh);}else{scene.add(mesh);}});
+   groups.forEach((gs,system)=>{const geometry=mergeGeometries(gs,false);if(!geometry)throw new Error('Could not assemble anatomy geometry.');geometries.push(geometry);const mesh=new T.Mesh(geometry,isChunkFRC?chunk10Material:mats.get(system as never));mesh.frustumCulled=false;if(system==='integumentary')mesh.renderOrder=100;if(isChunkFRC){tunerGroup.add(mesh);}else{scene.add(mesh);}});
    lastState=null;loaded++;onProgress(Math.round(loaded/atlas.chunks.length*100));dirty=true;
   };
   (async()=>{try{let cursor=0;await Promise.all(Array.from({length:3},async()=>{while(cursor<atlas.chunks.length){const i=cursor++;await loadChunk(i);}}));if(!disposed){ready=true;dirty=true;}}catch(e){if(!disposed)onError(e instanceof Error?e.message:'Could not load the anatomy.');}})();
@@ -169,16 +176,36 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   let currentThemeName=latestTheme.current;
   const animate=()=>{
    if(disposed)return;frame=requestAnimationFrame(animate);const dt=Math.min(clock.getDelta(),.05),s=latest.current;
-   if(currentThemeName!==latestTheme.current){
-    currentThemeName=latestTheme.current;
-    const isDark=currentThemeName==='dark';
-    renderer.setClearColor(isDark?'#1b1e22':'#f2f3f3');
-    (ground.material as T.MeshStandardMaterial).color.set(isDark?0x14171a:0xd5d9dc);
-    (platform.material as T.MeshStandardMaterial).color.set(isDark?0x23272d:0xeeeeec);
-    (ring.material as T.MeshBasicMaterial).color.set(isDark?0x3d454e:0x8c969f);
-    (innerRing.material as T.MeshBasicMaterial).color.set(isDark?0x2c333b:0xa4aeb8);
-    dirty=true;
-   }
+   const themeKey=`${latestTheme.current}:${s.accentTheme}:${s.customAccentColor}`;
+    if(themeKey!==lastThemeKey){
+     lastThemeKey=themeKey;
+     const p=getThemePalette(s.accentTheme??'navy_blue',latestTheme.current,s.customAccentColor??'#38bdf8');
+     renderer.setClearColor(p.bgCanvas);
+     (ground.material as T.MeshStandardMaterial).color.set(p.bgGround);
+     (platform.material as T.MeshStandardMaterial).color.set(p.bgPlatform);
+     (ring.material as T.MeshBasicMaterial).color.set(p.ringOuter);
+     (innerRing.material as T.MeshBasicMaterial).color.set(p.ringInner);
+     dirty=true;
+    }
+    const opacities={ ...DEFAULT_OPACITIES, ...(s.opacities??{}) };
+    let opChanged=false;
+    mats.forEach((mat,sysId)=>{
+     const targetOp=opacities[sysId as SystemId]??1.0;
+     if(Math.abs(mat.opacity-targetOp)>0.002){
+      mat.opacity=targetOp;
+      mat.transparent=targetOp<0.999;
+      mat.depthWrite=targetOp>=0.999;
+      opChanged=true;
+     }
+    });
+    const repOp=opacities['reproductive']??1.0;
+    if(Math.abs(chunk10Material.opacity-repOp)>0.002){
+     chunk10Material.opacity=repOp;
+     chunk10Material.transparent=repOp<0.999;
+     chunk10Material.depthWrite=repOp>=0.999;
+     opChanged=true;
+    }
+    if(opChanged)dirty=true;
    const changed=lastState?.visible!==s.visible||lastState?.selected!==s.selected||lastState?.isolate!==s.isolate;
    const moving=Math.abs(amount-s.explode)>.0001;
    if(moving){amount=T.MathUtils.damp(amount,s.explode,8,dt);dirty=true;}

@@ -21,8 +21,40 @@ export const SYSTEMS: {id:SystemId;name:string;color:string;description:string}[
 export interface Part {id:string;name:string;conceptId:string;system:SystemId;chunk:number;positions:number;normals:number;indices:number;uvs?:number;vertexCount:number;indexCount:number;bounds:[number[],number[]]}
 export interface Concept {id:string;name:string;elements:string[]}
 export interface Atlas {version:string;sex?:AnatomySex;source?:string;scope?:string;parts:Part[];concepts:Concept[];chunks:{url:string;bytes:number;gzip?:string;gzipBytes?:number}[];triangles:number}
-export type View = 'three-quarter'|'front'|'back'|'side';
-export interface SceneState {inspectorOpen?:boolean;explode:number;visible:SystemId[];selected:string[];isolate:boolean;view:View;rotate:boolean;reset:number;showDots?:boolean}
+export type View = 'three-quarter' | 'front' | 'side' | 'back';
+export type AccentThemeId = 'darkgray_lightgray' | 'navy_blue' | 'brown_cream' | 'red_pink' | 'greendark_greenlight' | 'custom';
+export const DEFAULT_OPACITIES: Record<SystemId, number> = {
+  skeletal: 1.0,
+  muscular: 1.0,
+  cardiac: 1.0,
+  sensory: 1.0,
+  arterial: 1.0,
+  venous: 1.0,
+  nervous: 1.0,
+  respiratory: 1.0,
+  digestive: 1.0,
+  urinary: 1.0,
+  lymphatic: 1.0,
+  endocrine: 1.0,
+  reproductive: 1.0,
+  integumentary: 0.23, // 23% transparent ghost skin by default!
+  pregnancy: 1.0,
+  connective: 1.0,
+};
+export interface SceneState {
+  inspectorOpen?: boolean;
+  explode: number;
+  visible: SystemId[];
+  selected: string[];
+  isolate: boolean;
+  view: View;
+  rotate: boolean;
+  reset: number;
+  showDots?: boolean;
+  opacities?: Partial<Record<SystemId, number>>;
+  accentTheme?: AccentThemeId;
+  customAccentColor?: string;
+}
 export const DEFAULT_VISIBLE:SystemId[] = ['cardiac','sensory','skeletal','muscular','arterial','venous','nervous','respiratory','digestive','urinary','lymphatic','endocrine','reproductive','connective'];
 export const EXPLANATIONS:Record<string,string> = {
  'uterus':'A hollow, muscular organ in the pelvis that supports embryonic and fetal development, menstruation, and pregnancy.',

@@ -1,7 +1,7 @@
 import {flushSync} from 'react-dom';
 import {registerAtlasTools} from './agent-tools';
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Activity,ArrowRightLeft,ArrowUpRight,ChevronRight,CircleDot,Focus,Info,Layers3,Moon,Pause,RotateCcw,RotateCw,Search,Sun,X} from 'lucide-react';
+import {Activity,ArrowRightLeft,ArrowUpRight,Check,ChevronDown,ChevronRight,ChevronUp,CircleDot,Focus,Info,Layers3,Moon,Pause,RotateCcw,RotateCw,Search,Sun,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Badge} from '@/components/ui/badge';
 import {Slider} from '@/components/ui/slider';
@@ -9,15 +9,31 @@ import {Switch} from '@/components/ui/switch';
 import {Sheet,SheetContent,SheetTitle,SheetDescription} from '@/components/ui/sheet';
 import {Combobox,ComboboxInput,ComboboxContent,ComboboxList,ComboboxItem,ComboboxEmpty} from '@/components/ui/combobox';
 import AnatomyScene from './scene';
-import {DEFAULT_VISIBLE,SYSTEMS,type AnatomySex,type Atlas,type Concept,type SceneState,type SystemId,type View} from './anatomy';
+import {DEFAULT_OPACITIES,DEFAULT_VISIBLE,SYSTEMS,type AnatomySex,type Atlas,type Concept,type SceneState,type SystemId,type View} from './anatomy';
 import {getVennClassification,getHomology,getStandardizedDescription} from './anatomy-dictionary';
-
+import {THEME_OPTIONS,getThemePalette,applyThemeToDom} from './theme-engine';
 import { ModelTuner } from './model-tuner';
 
-const initial:SceneState={explode:0,visible:DEFAULT_VISIBLE,selected:[],isolate:false,view:'three-quarter',rotate:false,reset:0,showDots:true};
+const initial:SceneState={
+ explode:0,
+ visible:DEFAULT_VISIBLE,
+ selected:[],
+ isolate:false,
+ view:'three-quarter',
+ rotate:false,
+ reset:0,
+ showDots:true,
+ opacities:{...DEFAULT_OPACITIES},
+ accentTheme:'navy_blue',
+ customAccentColor:'#38bdf8',
+};
 
 export default function Home(){
  const detailTitle=useRef<HTMLHeadingElement>(null);
+ const accentPickerRef=useRef<HTMLDivElement>(null);
+ const [accentPickerOpen,setAccentPickerOpen]=useState(false);
+ const [expandedSystems,setExpandedSystems]=useState<Set<SystemId>>(new Set(['integumentary']));
+
  const [theme,setTheme]=useState<'light'|'dark'>(()=>{
   if(typeof window!=='undefined'){
    const stored=localStorage.getItem('atlas_theme');
@@ -25,12 +41,15 @@ export default function Home(){
   }
   return 'light';
  });
+
  useEffect(()=>{
   if(typeof window==='undefined')return;
   localStorage.setItem('atlas_theme',theme);
   if(theme==='dark'){document.documentElement.classList.add('dark');}else{document.documentElement.classList.remove('dark');}
  },[theme]);
+
  const toggleTheme=()=>setTheme(t=>t==='dark'?'light':'dark');
+
  const [sex,setSex]=useState<AnatomySex>(()=>{
   if(typeof window!=='undefined'){
    const param=new URLSearchParams(window.location.search).get('sex');
@@ -38,6 +57,7 @@ export default function Home(){
   }
   return 'male';
  });
+
  const [pendingTarget,setPendingTarget]=useState<string|null>(null);
  const [atlas,setAtlas]=useState<Atlas|null>(null);
  const [state,setState]=useState(initial);
@@ -49,6 +69,23 @@ export default function Home(){
  const [query,setQuery]=useState('');
  const [chosen,setChosen]=useState<Concept|null>(null);
 
+ // Sync theme variables to DOM when theme, accent theme, or custom color changes
+ useEffect(()=>{
+  const palette=getThemePalette(state.accentTheme??'navy_blue',theme,state.customAccentColor??'#38bdf8');
+  applyThemeToDom(palette);
+ },[state.accentTheme,state.customAccentColor,theme]);
+
+ // Close accent theme picker on outside click
+ useEffect(()=>{
+  const handleClickOutside=(e:MouseEvent)=>{
+   if(accentPickerRef.current&&!accentPickerRef.current.contains(e.target as Node)){
+    setAccentPickerOpen(false);
+   }
+  };
+  document.addEventListener('pointerdown',handleClickOutside);
+  return ()=>document.removeEventListener('pointerdown',handleClickOutside);
+ },[]);
+
  useEffect(()=>{
   if(typeof window!=='undefined'){
    const url=new URL(window.location.href);
@@ -58,69 +95,45 @@ export default function Home(){
    }
   }
   const abort=new AbortController();
-  setProgress(0);
-  setError('');
-  setAtlas(null);
-  setChosen(null);
-  setDetails(false);
-  setState(prev=>({
-   ...prev,
-   selected:[],
-   isolate:false,
-   reset:prev.reset+1,
-  }));
-  const modelUrl=sex==='female'?'/models/atlas-female.json':'/models/atlas.json';
-  fetch(modelUrl,{signal:abort.signal})
-   .then(r=>{if(!r.ok)throw new Error('The anatomy catalogue could not be loaded.');return r.json();})
-   .then(data=>{
-    const a=data as Atlas;
+  const file=sex==='female'?'/models/female-atlas.json':'/models/male-atlas.json';
+  fetch(file,{signal:abort.signal})
+   .then(r=>r.json() as Promise<Atlas>)
+   .then(a=>{
     setAtlas(a);
-    if(pendingTarget){
-     const term=pendingTarget.toLowerCase().trim();
-     const match=a.concepts.find(c=>c.name.toLowerCase()===term||c.id.toLowerCase()===term)||a.concepts.find(c=>c.name.toLowerCase().includes(term));
-     if(match){
-      setChosen(match);
-      setState(s=>({...s,selected:match.elements,isolate:false,rotate:false}));
-      setDetails(true);
-     }
-     setPendingTarget(null);
-    }
+    setState(s=>({
+     ...s,
+     visible:sex==='female'?[...DEFAULT_VISIBLE,'integumentary']:DEFAULT_VISIBLE,
+     selected:[],
+     isolate:false,
+    }));
    })
-   .catch(e=>{if(e.name!=='AbortError')setError(e.message);});
-  return()=>abort.abort();
+   .catch(e=>{
+    if(!abort.signal.aborted)setError('Could not load anatomical definitions for this sex.');
+   });
+  return ()=>abort.abort();
  },[sex]);
 
- useEffect(()=>{
-  const key=(e:KeyboardEvent)=>{
-   if(e.key==='/'&&!(e.target instanceof HTMLInputElement)&&!(e.target instanceof HTMLTextAreaElement)){
-    e.preventDefault();
-    setPanel('search');
-    setDetails(false);
-   }
-  };
-  window.addEventListener('keydown',key);
-  return()=>window.removeEventListener('keydown',key);
- },[]);
+ const parts=useMemo(()=>new Map((atlas?.parts??[]).map(p=>[p.id,p])),[atlas]);
 
- const parts=useMemo(()=>new Map(atlas?.parts.map(p=>[p.id,p])),[atlas]);
- const counts=useMemo(()=>Object.fromEntries(SYSTEMS.map(s=>[s.id,atlas?.parts.filter(p=>p.system===s.id).length??0])),[atlas]);
- const activeSystems=SYSTEMS.filter(s=>counts[s.id]>0);
- const selectedParts=state.selected.map(id=>parts.get(id)).filter(p=>!!p);
- const selected=selectedParts[0];
- const system=SYSTEMS.find(s=>s.id===selected?.system);
- const visibleCount=atlas?.parts.filter(p=>state.isolate?state.selected.includes(p.id):state.visible.includes(p.system)||state.selected.includes(p.id)).length??0;
+ const counts=useMemo(()=>{
+  const m=Object.fromEntries(SYSTEMS.map(s=>[s.id,0])) as Record<SystemId,number>;
+  atlas?.parts.forEach(p=>{m[p.system]=(m[p.system]||0)+1;});
+  return m;
+ },[atlas]);
+
+ const activeSystems=useMemo(()=>SYSTEMS.filter(s=>counts[s.id]>0),[counts]);
+
+ const visibleCount=useMemo(()=>{
+  if(!atlas)return 0;
+  const s=new Set(state.visible);
+  return atlas.parts.filter(p=>s.has(p.system)).length;
+ },[atlas,state.visible]);
 
  const results=useMemo(()=>{
-  if(!atlas)return[];
-  const term=query.toLowerCase().trim();
-  if(!term){
-   const defaults=sex==='female'
-    ?['heart','brain','liver','uterus','vagina','ovary','stomach','urinary bladder','trachea']
-    :['heart','brain','liver','stomach','spleen','pancreas','urinary bladder','trachea'];
-   return defaults.map(name=>atlas.concepts.find(c=>c.name.toLowerCase()===name)).filter((x):x is Concept=>!!x);
-  }
-  return atlas.concepts.filter(c=>c.name.toLowerCase().includes(term)||c.id.toLowerCase().includes(term)).sort((a,b)=>a.name.length-b.name.length).slice(0,80);
- },[atlas,query,sex]);
+  if(!atlas||!query)return [];
+  const q=query.toLowerCase().trim();
+  return atlas.concepts.filter(c=>c.name.toLowerCase().includes(q)).slice(0,80);
+ },[atlas,query]);
 
  const choose=(c:Concept)=>{
   setChosen(c);
@@ -128,6 +141,24 @@ export default function Home(){
   setDetails(true);
   setPanel(null);
  };
+
+ const selectedParts=useMemo(()=>{
+  if(!atlas||state.selected.length===0)return [];
+  return state.selected.map(id=>parts.get(id)!).filter(Boolean);
+ },[atlas,parts,state.selected]);
+
+ const selected=selectedParts[0];
+ const system=SYSTEMS.find(s=>s.id===selected?.system);
+
+ useEffect(()=>{
+  if(!pendingTarget||!atlas)return;
+  const targetLower=pendingTarget.toLowerCase().trim();
+  const found=atlas.concepts.find(c=>c.name.toLowerCase()===targetLower);
+  if(found){
+   choose(found);
+   setPendingTarget(null);
+  }
+ },[atlas,pendingTarget]);
 
  useEffect(()=>{
   if(!atlas)return;
@@ -149,7 +180,14 @@ export default function Home(){
  };
 
  const reset=()=>{
-  setState(s=>({...initial,visible:sex==='female'?[...DEFAULT_VISIBLE,'integumentary']:DEFAULT_VISIBLE,reset:s.reset+1}));
+  setState(s=>({
+   ...initial,
+   visible:sex==='female'?[...DEFAULT_VISIBLE,'integumentary']:DEFAULT_VISIBLE,
+   reset:s.reset+1,
+   opacities:{...DEFAULT_OPACITIES},
+   accentTheme:s.accentTheme,
+   customAccentColor:s.customAccentColor,
+  }));
   setChosen(null);
   setDetails(false);
   setPanel(null);
@@ -158,6 +196,15 @@ export default function Home(){
  const openPanel=(next:'layers'|'search')=>{
   setDetails(false);
   setPanel(p=>p===next?null:next);
+ };
+
+ const toggleSystemAccordion=(id:SystemId)=>{
+  setExpandedSystems(prev=>{
+   const next=new Set(prev);
+   if(next.has(id))next.delete(id);
+   else next.add(id);
+   return next;
+  });
  };
 
  return <main className="studio">
@@ -180,6 +227,7 @@ export default function Home(){
   />
   <div className="vignette"/>
 
+  {/* Header left */}
   <header className="identity">
    <div className="eyebrow"><span className="status-dot"/> INTERACTIVE ANATOMY</div>
    <h1>Human Atlas<Badge variant="outline" className="edition">3D</Badge></h1>
@@ -206,12 +254,20 @@ export default function Home(){
    </div>
   </header>
 
+  {/* Top center caption */}
+  <div className="top-center-caption">
+   <span className="caption-line"/>
+   <span>{state.isolate?(chosen?.name??'SELECTED STRUCTURE'):state.explode>.95?'ANATOMICAL INVENTORY':state.explode>.05?'SEPARATED STRUCTURES':sex==='female'?'FEMALE · REFERENCE ANATOMY':'ADULT HUMAN · MALE'}</span>
+   <span className="caption-line"/>
+  </div>
+
+  {/* Top actions right */}
   <nav className="top-actions" aria-label="Explorer panels">
    <Button
     variant="ghost"
     className="icon-button theme-toggle"
     aria-label={theme==='dark'?'Switch to light mode':'Switch to dark mode'}
-    title={theme==='dark'?'Light mode':'Dark mode (darkgray)'}
+    title={theme==='dark'?'Light mode':'Dark mode'}
     onClick={toggleTheme}
     style={{cursor:'pointer'}}
    >
@@ -225,6 +281,7 @@ export default function Home(){
    </Button>
   </nav>
 
+  {/* Systems panel (Left) */}
   <section className={`layers-panel glass ${panel==='layers'?'mobile-open':''}`} aria-label="Anatomical layers">
    <div className="panel-heading">
     <span>Systems</span>
@@ -237,12 +294,104 @@ export default function Home(){
     <Button variant="ghost" aria-pressed={state.visible.length>=6&&['cardiac','respiratory','digestive','urinary','endocrine','reproductive'].every(id=>state.visible.includes(id as SystemId))} onClick={()=>setState(s=>({...s,selected:[],isolate:false,visible:['cardiac','respiratory','digestive','urinary','endocrine','reproductive']}))}>Organs</Button>
    </div>
    <div className="system-list">
-    {activeSystems.map(s=><div className={`system-row ${state.visible.includes(s.id)?'enabled':''}`} key={s.id}>
-     <Button variant="ghost" className="system-name" title={`Show only ${s.name.toLowerCase()}`} onClick={()=>setState(v=>({...v,visible:[s.id],isolate:false,selected:[]}))}>
-      <span className="system-dot" style={{background:s.color}}/>{s.name}<span className="system-count">{counts[s.id]}</span>
-     </Button>
-     <Switch checked={state.visible.includes(s.id)} onCheckedChange={()=>toggle(s.id)} aria-label={`Show ${s.name.toLowerCase()}`} />
-    </div>)}
+    {activeSystems.map(s=>{
+     const isExpanded=expandedSystems.has(s.id);
+     const isEnabled=state.visible.includes(s.id);
+     const currentOp=state.opacities?.[s.id]??DEFAULT_OPACITIES[s.id]??1.0;
+     const opPercent=Math.round(currentOp*100);
+
+     return (
+      <div className={`system-accordion-item ${isEnabled?'enabled':''}`} key={s.id}>
+       <div className="system-accordion-header">
+        <Button
+         variant="ghost"
+         className="system-name"
+         title={`Show only ${s.name.toLowerCase()}`}
+         onClick={()=>setState(v=>({...v,visible:[s.id],isolate:false,selected:[]}))}
+        >
+         <span className="system-dot" style={{background:s.color}}/>
+         {s.name}
+         <span className="system-count">{counts[s.id]}</span>
+        </Button>
+        <div style={{display:'flex',alignItems:'center',gap:'4px'}}>
+         <Button
+          variant="ghost"
+          className="system-expand-btn"
+          title={isExpanded?'Collapse transparency slider':'Adjust transparency'}
+          aria-label={isExpanded?'Collapse transparency':'Adjust transparency'}
+          onClick={()=>toggleSystemAccordion(s.id)}
+         >
+          {isExpanded?<ChevronUp size={13}/>:<ChevronDown size={13}/>}
+         </Button>
+         <Switch checked={isEnabled} onCheckedChange={()=>toggle(s.id)} aria-label={`Show ${s.name.toLowerCase()}`}/>
+        </div>
+       </div>
+
+       {isExpanded&&(
+        <div className="system-opacity-drawer">
+         <div className="system-opacity-label">
+          <span>Opacity</span>
+          <span className="opacity-badge">{opPercent}%</span>
+         </div>
+         <Slider
+          aria-label={`${s.name} opacity`}
+          min={0}
+          max={100}
+          step={1}
+          value={[opPercent]}
+          onValueChange={v=>{
+           const val=Array.isArray(v)?v[0]:v;
+           setState(prev=>({
+            ...prev,
+            opacities:{...(prev.opacities??DEFAULT_OPACITIES),[s.id]:val/100}
+           }));
+          }}
+         />
+         <div className="opacity-presets">
+          <Button
+           variant="ghost"
+           className={`opacity-preset-btn ${opPercent===0?'active':''}`}
+           onClick={()=>setState(prev=>({...prev,opacities:{...(prev.opacities??DEFAULT_OPACITIES),[s.id]:0}}))}
+          >
+           0%
+          </Button>
+          {s.id==='integumentary'?(
+           <Button
+            variant="ghost"
+            className={`opacity-preset-btn ${opPercent===23?'active':''}`}
+            onClick={()=>setState(prev=>({...prev,opacities:{...(prev.opacities??DEFAULT_OPACITIES),[s.id]:0.23}}))}
+           >
+            23%
+           </Button>
+          ):(
+           <Button
+            variant="ghost"
+            className={`opacity-preset-btn ${opPercent===20?'active':''}`}
+            onClick={()=>setState(prev=>({...prev,opacities:{...(prev.opacities??DEFAULT_OPACITIES),[s.id]:0.20}}))}
+           >
+            20%
+           </Button>
+          )}
+          <Button
+           variant="ghost"
+           className={`opacity-preset-btn ${opPercent===50?'active':''}`}
+           onClick={()=>setState(prev=>({...prev,opacities:{...(prev.opacities??DEFAULT_OPACITIES),[s.id]:0.50}}))}
+          >
+           50%
+          </Button>
+          <Button
+           variant="ghost"
+           className={`opacity-preset-btn ${opPercent===100?'active':''}`}
+           onClick={()=>setState(prev=>({...prev,opacities:{...(prev.opacities??DEFAULT_OPACITIES),[s.id]:1.0}}))}
+          >
+           100%
+          </Button>
+         </div>
+        </div>
+       )}
+      </div>
+     );
+    })}
    </div>
    <div className="panel-foot">
     <span>{visibleCount.toLocaleString()} pieces visible</span>
@@ -250,6 +399,7 @@ export default function Home(){
    </div>
   </section>
 
+  {/* Search panel */}
   {panel==='search'&&<section className="search-panel glass" aria-label="Find anatomy">
    <div className="panel-heading"><span>Find a structure</span><Button variant="ghost" className="icon-button" onClick={()=>setPanel(null)} aria-label="Close search"><X size={18}/></Button></div>
    <Combobox<Concept> items={results} value={null} onValueChange={value=>{if(value)choose(value);}} inputValue={query} onInputValueChange={setQuery} itemToStringLabel={c=>c.name} filter={null} open onOpenChange={open=>{if(!open)setPanel(null);}}>
@@ -267,51 +417,173 @@ export default function Home(){
    <p className="search-note">{query?'Showing up to 80 matches. Refine your search to find smaller structures.':'Start with a major organ, or search every named structure.'}</p>
   </section>}
 
-  <nav className="view-controls glass" aria-label="Camera controls">
-   {(['three-quarter','front','side','back'] as View[]).map((v,i)=><Button variant="ghost" key={v} className={state.view===v?'active':''} aria-pressed={state.view===v} disabled={state.explode>.8&&v!=='front'} onClick={()=>setState(s=>({...s,view:v,reset:s.reset+1,rotate:false}))} title={`${v} view`} aria-label={`${v} view`}><span>{['¾','F','S','B'][i]}</span></Button>)}
-   <i/>
-   <Button variant="ghost" disabled={state.explode>=.4} aria-label={state.rotate?'Pause rotation':'Rotate body'} title="Auto rotate" className={state.rotate?'active':''} onClick={()=>setState(s=>({...s,rotate:!s.rotate}))}>{state.rotate?<Pause size={17}/>:<RotateCw size={18}/>}</Button>
-   <Button variant="ghost" aria-label="Reset view and layers" title="Reset" onClick={reset}><RotateCcw size={17}/></Button>
-  </nav>
-
-  <div className="scene-caption">
-   <span className="caption-line"/>
-   <span>{state.isolate?(chosen?.name??'SELECTED STRUCTURE'):state.explode>.95?'ANATOMICAL INVENTORY':state.explode>.05?'SEPARATED STRUCTURES':sex==='female'?'FEMALE · REFERENCE ANATOMY':'ADULT HUMAN · MALE'}</span>
-   <span className="caption-line"/>
-  </div>
-
-  <div className="bottom-dock glass">
-   <Button variant="ghost" className="mobile-only dock-layers" onClick={()=>openPanel('layers')} aria-label="Open system layers"><Layers3 size={20}/><span>Systems</span></Button>
-   <div className="explode-control">
-    <div className="explode-label"><label id="explode-label">Explode anatomy</label><output>{Math.round(state.explode*100)}<span>%</span></output></div>
-    <Slider aria-labelledby="explode-label" min={0} max={100} step={1} value={[state.explode*100]} onValueChange={v=>setState(s=>({...s,explode:(Array.isArray(v)?v[0]:v)/100,view:(Array.isArray(v)?v[0]:v)>80?'front':s.view,rotate:false}))}/>
-    <div className="slider-endpoints"><span>Assembled</span><span>Every piece</span></div>
-   </div>
-   {state.explode > 0.05 && (
+  {/* Consolidated Right-Side View Controls: Single Vertical Column (v12) */}
+  <aside className="right-command-deck glass" aria-label="Camera and view controls">
+   {/* 1. View angles */}
+   <div className="deck-angles-column">
+    {(['three-quarter','front','side','back'] as View[]).map((v,i)=>(
      <Button
       variant="ghost"
-      className="dock-reset"
-      onClick={()=>setState(s=>({...s,showDots:s.showDots===false?true:false}))}
-      title={state.showDots===false?'Show inspection dots':'Hide inspection dots (bare exploded view)'}
-      aria-label="Toggle inspection dots"
-      style={{color:state.showDots===false?'#94a3b8':'#38bdf8',display:'flex',alignItems:'center',gap:'5px'}}
+      key={v}
+      className={`deck-col-btn ${state.view===v?'active':''}`}
+      aria-pressed={state.view===v}
+      disabled={state.explode>.8&&v!=='front'}
+      onClick={()=>setState(s=>({...s,view:v,reset:s.reset+1,rotate:false}))}
+      title={`${v} view`}
+      aria-label={`${v} view`}
      >
-      <CircleDot size={18}/>
-      <span style={{fontSize:'12px'}}>{state.showDots===false?'Dots: Off':'Dots: On'}</span>
+      <span>{['¾','F','S','B'][i]}</span>
      </Button>
-    )}
-    <Button variant="ghost" className="dock-reset" onClick={reset} aria-label="Assemble and reset"><RotateCcw size={18}/><span>Reset</span></Button>
-  </div>
+    ))}
+   </div>
 
+   <div className="deck-divider"/>
+
+   {/* 2. Inspection dots toggle */}
+   <Button
+    variant="ghost"
+    className={`deck-col-btn ${state.showDots!==false?'active':''}`}
+    onClick={()=>setState(s=>({...s,showDots:s.showDots===false?true:false}))}
+    title={state.showDots===false?'Turn on inspection dots':'Bare mode: hide inspection dots'}
+    aria-label="Toggle inspection dots"
+   >
+    <CircleDot size={15}/>
+   </Button>
+
+   {/* 3. Auto rotate toggle */}
+   <Button
+    variant="ghost"
+    disabled={state.explode>=.4}
+    className={`deck-col-btn ${state.rotate?'active':''}`}
+    onClick={()=>setState(s=>({...s,rotate:!s.rotate}))}
+    title={state.rotate?'Pause auto-rotation':'Start auto-rotation'}
+    aria-label="Auto rotate"
+   >
+    {state.rotate?<Pause size={15}/>:<RotateCw size={15}/>}
+   </Button>
+
+   <div className="deck-divider"/>
+
+   {/* 4. Reset view button with plain text */}
+   <button
+    type="button"
+    className="deck-reset-btn"
+    onClick={reset}
+    title="Reset view and camera"
+    aria-label="Reset view"
+   >
+    <RotateCcw size={13}/>
+    <span>Reset view</span>
+   </button>
+
+   <div className="deck-divider"/>
+
+   {/* 5. Explode anatomy vertical slider */}
+   <div className="deck-explode-column">
+    <span className="deck-badge">{Math.round(state.explode*100)}%</span>
+    <Slider
+     orientation="vertical"
+     aria-label="Explode anatomy slider"
+     min={0}
+     max={100}
+     step={1}
+     value={[state.explode*100]}
+     onValueChange={v=>{
+      const val=Array.isArray(v)?v[0]:v;
+      setState(s=>({
+       ...s,
+       explode:val/100,
+       view:val>80?'front':s.view,
+       rotate:false
+      }));
+     }}
+     className="deck-vertical-slider"
+    />
+    <span className="deck-col-label">EXPLODE</span>
+   </div>
+  </aside>
+
+  {/* Studio Bottom Bar: Inline Theme Dropdown on far left + Guidance + Source Link */}
   <footer className="studio-footer">
-   <span>{state.explode>.8?'Drag to pan':'Drag to orbit'} <b>·</b> Pinch to zoom <b>·</b> Tap to inspect</span>
-   <Button variant="ghost" onClick={()=>{setDetails(false);setPanel(null);setAbout(true);}}>Source & credits <ArrowUpRight size={12}/></Button>
+   <div className="footer-left">
+    <div className="accent-theme-picker" ref={accentPickerRef}>
+     <button
+      type="button"
+      className="accent-picker-trigger glass"
+      onClick={()=>setAccentPickerOpen(prev=>!prev)}
+      title="Accent theme"
+      aria-label="Select accent theme"
+     >
+      <span
+       className="accent-dot"
+       style={{
+        background:state.accentTheme==='custom'
+         ?(state.customAccentColor??'#38bdf8')
+         :(THEME_OPTIONS.find(t=>t.id===state.accentTheme)?.[theme==='dark'?'dotColorDark':'dotColorLight']??'#0284c7')
+       }}
+      />
+      <span>{THEME_OPTIONS.find(t=>t.id===state.accentTheme)?.label??'Theme'}</span>
+      {accentPickerOpen?<ChevronDown size={12}/>:<ChevronUp size={12}/>}
+     </button>
+
+     {accentPickerOpen&&(
+      <div className="accent-dropdown glass" role="menu">
+       {THEME_OPTIONS.map(opt=>{
+        const isActive=(state.accentTheme??'navy_blue')===opt.id;
+        return (
+         <button
+          key={opt.id}
+          type="button"
+          className={`accent-dropdown-item ${isActive?'active':''}`}
+          onClick={()=>{
+           setState(s=>({...s,accentTheme:opt.id}));
+           if(opt.id!=='custom')setAccentPickerOpen(false);
+          }}
+         >
+          <span className="accent-swatch-pair">
+           <span className="swatch-circle" style={{background:opt.dotColorDark}} title="Dark tone"/>
+           <span className="swatch-circle" style={{background:opt.dotColorLight}} title="Light tone"/>
+          </span>
+          <span style={{flex:1}}>{opt.label}</span>
+          {isActive&&<Check size={13}/>}
+         </button>
+        );
+       })}
+
+       {state.accentTheme==='custom'&&(
+        <div className="custom-color-row">
+         <span>Custom Color</span>
+         <input
+          type="color"
+          className="custom-color-input"
+          value={state.customAccentColor??'#38bdf8'}
+          onChange={e=>{
+           const col=e.target.value;
+           setState(s=>({...s,customAccentColor:col}));
+          }}
+         />
+        </div>
+       )}
+      </div>
+     )}
+    </div>
+
+    <span className="footer-guide">
+     {state.explode>.8?'Drag to pan':'Drag to orbit'} <b>·</b> Pinch to zoom <b>·</b> Tap to inspect
+    </span>
+   </div>
+
+   <div className="footer-right">
+    <Button variant="ghost" onClick={()=>{setDetails(false);setPanel(null);setAbout(true);}}>
+     Source & credits <ArrowUpRight size={12}/>
+    </Button>
+   </div>
   </footer>
 
   {progress<100&&!error&&<div className="loading glass" role="status"><Activity size={18}/><div><strong>Preparing the anatomy</strong><span>{progress}% · Loading {atlas?.parts.length.toLocaleString()??(sex==='female'?'888':'2,234')} pieces</span><div className="loading-track"><i style={{width:`${progress}%`}}/></div></div></div>}
   {error&&<div className="loading glass error" role="alert"><p>{error}</p><Button variant="ghost" onClick={()=>location.reload()}>Reload viewer</Button></div>}
 
-  {/* Standardized Information Panel: Identical layout and quality for Male and Female */}
+  {/* Standardized Information Panel */}
   <Sheet open={details&&selectedParts.length>0} modal={false} disablePointerDismissal onOpenChange={setDetails}>
    <SheetContent initialFocus={detailTitle} className={`detail-sheet glass ${state.isolate?'is-isolated':''}`} showCloseButton={true}>
     <div className="detail-header">
