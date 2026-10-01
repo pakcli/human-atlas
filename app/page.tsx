@@ -428,7 +428,7 @@ export default function Home(){
       key={v}
       className={`deck-col-btn ${state.view===v?'active':''}`}
       aria-pressed={state.view===v}
-      disabled={state.explode>.8&&v!=='front'}
+      
       onClick={()=>setState(s=>({...s,view:v,reset:s.reset+1,rotate:false}))}
       title={`${v} view`}
       aria-label={`${v} view`}
@@ -494,7 +494,7 @@ export default function Home(){
       setState(s=>({
        ...s,
        explode:val/100,
-       view:val>80?'front':s.view,
+       
        rotate:false
       }));
      }}
@@ -570,7 +570,7 @@ export default function Home(){
     </div>
 
     <span className="footer-guide">
-     {state.explode>.8?'Drag to pan':'Drag to orbit'} <b>·</b> Pinch to zoom <b>·</b> Tap to inspect
+     Left-drag to orbit · Right-drag to pan · Tap to inspect
     </span>
    </div>
 

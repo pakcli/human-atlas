@@ -23,12 +23,35 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   renderer.setPixelRatio(Math.min(devicePixelRatio,innerWidth<768?1.5:2));renderer.setClearColor(initPalette.bgCanvas);renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;el.appendChild(renderer.domElement);
   renderer.domElement.setAttribute('aria-label','Interactive human anatomy. Drag to orbit, pinch or scroll to zoom, and tap a structure to inspect it.');
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(34,1,.005,100),controls=new OrbitControls(camera,renderer.domElement);
-  camera.position.set(1.32,1.08,3.77);controls.target.set(0,.86,0);controls.enableDamping=true;controls.dampingFactor=.085;controls.minDistance=.07;controls.maxDistance=40;controls.maxPolarAngle=Math.PI*.96;controls.addEventListener('change',()=>{dirty=true;});
+  camera.position.set(1.32,1.08,3.77);controls.target.set(0,.86,0);controls.enableDamping=true;controls.dampingFactor=.085;controls.minDistance=.07;controls.maxDistance=40;controls.maxPolarAngle=Math.PI*.96;
+  controls.screenSpacePanning=true;controls.enablePan=true;controls.enableRotate=true;
+  controls.mouseButtons={LEFT:T.MOUSE.ROTATE,MIDDLE:T.MOUSE.DOLLY,RIGHT:T.MOUSE.PAN};
+  controls.touches={ONE:T.TOUCH.ROTATE,TWO:T.TOUCH.DOLLY_PAN};
+  controls.addEventListener('change',()=>{dirty=true;});
   const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment(),env=pmrem.fromScene(room,.04);scene.environment=env.texture;room.dispose();pmrem.dispose();
   scene.add(new T.HemisphereLight(0xffffff,0xa7acb2,1.05));
   const key=new T.DirectionalLight(0xfffaf4,2.3);key.position.set(-2,4,3);scene.add(key);
   const rim=new T.DirectionalLight(0xe9f0ff,1.8);rim.position.set(2,2,-3);scene.add(rim);
-  const ground=new T.Mesh(new T.CircleGeometry(30,96),new T.MeshStandardMaterial({color:initPalette.bgGround,roughness:1}));ground.rotation.x=-Math.PI/2;ground.position.y=-.019;scene.add(ground);
+  const groundAlphaTexture=(()=>{
+   const size=256,canvas=document.createElement('canvas');
+   canvas.width=canvas.height=size;
+   const ctx=canvas.getContext('2d')!;
+   const center=size/2;
+   const grad=ctx.createRadialGradient(center,center,center*0.12,center,center,center*0.96);
+   grad.addColorStop(0.0,'rgba(255,255,255,1.0)');
+   grad.addColorStop(0.35,'rgba(255,255,255,0.75)');
+   grad.addColorStop(0.7,'rgba(255,255,255,0.22)');
+   grad.addColorStop(1.0,'rgba(255,255,255,0.0)');
+   ctx.fillStyle=grad;
+   ctx.fillRect(0,0,size,size);
+   const tex=new T.CanvasTexture(canvas);
+   tex.wrapS=tex.wrapT=T.ClampToEdgeWrapping;
+   tex.needsUpdate=true;
+   return tex;
+  })();
+  const groundMat=new T.MeshStandardMaterial({color:initPalette.bgGround,roughness:1,transparent:true,alphaMap:groundAlphaTexture,depthWrite:false});
+  const ground=new T.Mesh(new T.CircleGeometry(26,96),groundMat);ground.rotation.x=-Math.PI/2;ground.position.y=-.019;scene.add(ground);
+  scene.fog=new T.FogExp2(initPalette.bgCanvas,0.035);
   const platform=new T.Mesh(new T.CylinderGeometry(.68,.7,.028,100),new T.MeshStandardMaterial({color:initPalette.bgPlatform,metalness:.12,roughness:.67}));platform.position.y=-.016;scene.add(platform);
   const ring=new T.Mesh(new T.RingGeometry(.63,.632,128),new T.MeshBasicMaterial({color:initPalette.ringOuter,transparent:true,opacity:.4,side:T.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.001;scene.add(ring);
   const innerRing=new T.Mesh(new T.RingGeometry(.55,.551,128),new T.MeshBasicMaterial({color:initPalette.ringInner,transparent:true,opacity:.16,side:T.DoubleSide}));innerRing.rotation.x=-Math.PI/2;innerRing.position.y=.001;scene.add(innerRing);
@@ -156,22 +179,161 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   const fit=(view:string,extent=0)=>{
    const aspect=camera.aspect,mobile=el.clientWidth<768,normalDistance=mobile?Math.max(4.5,1.8*el.clientHeight/Math.max(160,el.clientHeight-350)/(2*Math.tan(T.MathUtils.degToRad(camera.fov/2)))):4;
    const reservedHeight=mobile?350:270;const availableAspect=Math.max(.35,(el.clientWidth-(mobile?40:340))/Math.max(160,el.clientHeight-reservedHeight));const atlasDistance=Math.max(packingHeight,packingWidth/availableAspect)/(2*Math.tan(T.MathUtils.degToRad(camera.fov/2)))*(el.clientHeight/Math.max(160,el.clientHeight-reservedHeight))*1.08;
-   const distance=T.MathUtils.lerp(normalDistance,Math.max(.2,atlasDistance),extent);if(extent>.8)view='front';
+   const distance=T.MathUtils.lerp(normalDistance,Math.max(.2,atlasDistance),extent);
    const direction=view==='front'?new T.Vector3(0,.02,1):view==='back'?new T.Vector3(0,.02,-1):view==='side'?new T.Vector3(1,.02,0):new T.Vector3(.35,.06,1).normalize();
    controls.target.set(extent>.1&&el.clientWidth>767?-packingWidth*.12:0,extent>.1?.88:(mobile?.85:.86),0);camera.position.copy(controls.target).addScaledVector(direction,distance);controls.update();dirty=true;
   };
   const resize=()=>{layoutKey='';lastState=null;renderer.setPixelRatio(Math.min(devicePixelRatio,el.clientWidth<768||el.clientHeight<600?1.5:2));camera.aspect=el.clientWidth/el.clientHeight;camera.updateProjectionMatrix();renderer.setSize(el.clientWidth,el.clientHeight);fit(latest.current.view,amount);};const observer=new ResizeObserver(resize);observer.observe(el);
   const raycaster=new T.Raycaster(),pointer=new T.Vector2(),tap=new PointerTap(),worldBox=new T.Box3(),hitPoint=new T.Vector3();
-  const down=(e:PointerEvent)=>{hover.hidden=true;tap.down(e.pointerId,e.clientX,e.clientY,e.pointerType==='touch'?12:5);};
-  const move=(e:PointerEvent)=>{tap.move(e.pointerId,e.clientX,e.clientY);if(e.buttons||amount<.5||e.pointerType==='touch'){hover.hidden=true;return;}const rect=el.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top,index=findTarget(x,y,12);hover.hidden=index<0;renderer.domElement.style.cursor=index<0?'grab':'pointer';if(index>=0){hover.textContent=atlas.parts[index].name;hover.style.left=`${Math.max(8,Math.min(x+14,el.clientWidth-260))}px`;hover.style.top=`${Math.max(8,Math.min(y+18,el.clientHeight-55))}px`;}};
-  const cancel=(e:PointerEvent)=>tap.cancel(e.pointerId);
+  const planePoint1=new T.Vector3(),planePoint2=new T.Vector3(),panCoord=new T.Vector2();
+  const getLibraryPlanePoint=(cx:number,cy:number,out:T.Vector3):boolean=>{
+   const rect=el.getBoundingClientRect();
+   const ndcX=((cx-rect.left)/rect.width)*2-1;
+   const ndcY=-((cy-rect.top)/rect.height)*2+1;
+   panCoord.set(ndcX,ndcY);
+   raycaster.setFromCamera(panCoord,camera);
+   const ray=raycaster.ray;
+   if(Math.abs(ray.direction.z)<1e-4)return false;
+   const t=-ray.origin.z/ray.direction.z;
+   if(t<0)return false;
+   out.copy(ray.origin).addScaledVector(ray.direction,t);
+   return true;
+  };
+  const panLibraryPlane=(dx:number,dy:number,cx:number,cy:number)=>{
+   const ok1=getLibraryPlanePoint(cx-dx,cy-dy,planePoint1);
+   const ok2=getLibraryPlanePoint(cx,cy,planePoint2);
+   if(ok1&&ok2){
+    const deltaX=planePoint2.x-planePoint1.x;
+    const deltaY=planePoint2.y-planePoint1.y;
+    controls.target.x-=deltaX;
+    controls.target.y-=deltaY;
+    camera.position.x-=deltaX;
+    camera.position.y-=deltaY;
+   }else{
+    const dist=camera.position.distanceTo(controls.target);
+    const factor=(2*dist*Math.tan(T.MathUtils.degToRad(camera.fov/2)))/el.clientHeight;
+    controls.target.x-=dx*factor;
+    controls.target.y+=dy*factor;
+    camera.position.x-=dx*factor;
+    camera.position.y+=dy*factor;
+   }
+   controls.target.z=0;
+   controls.update();
+   dirty=true;
+  };
+  let isPanningAisle=false,lastPanX=0,lastPanY=0;
+  const touchCoords=new Map<number,{x:number;y:number}>();
+  let lastTouchMidX=0,lastTouchMidY=0,lastTouchDist=0;
+  const down=(e:PointerEvent)=>{
+   hover.hidden=true;
+   tap.down(e.pointerId,e.clientX,e.clientY,e.pointerType==='touch'?12:5);
+   if(e.pointerType==='touch'){
+    touchCoords.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(touchCoords.size>=2){
+     const pts=Array.from(touchCoords.values());
+     lastTouchMidX=(pts[0].x+pts[1].x)/2;
+     lastTouchMidY=(pts[0].y+pts[1].y)/2;
+     lastTouchDist=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
+     if(amount>.4&&!latest.current.isolate){
+      isPanningAisle=true;
+      e.stopImmediatePropagation();
+     }
+    }else{
+     isPanningAisle=false;
+    }
+   }else{
+    const isMousePan=e.ctrlKey||e.shiftKey||e.button===2||(e.buttons&2)!==0;
+    if(amount>.4&&isMousePan&&!latest.current.isolate){
+     isPanningAisle=true;
+     lastPanX=e.clientX;
+     lastPanY=e.clientY;
+     e.stopImmediatePropagation();
+    }else{
+     isPanningAisle=false;
+    }
+   }
+  };
+  const move=(e:PointerEvent)=>{
+   tap.move(e.pointerId,e.clientX,e.clientY);
+   if(e.pointerType==='touch'){
+    touchCoords.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(touchCoords.size>=2&&amount>.4&&!latest.current.isolate){
+     const pts=Array.from(touchCoords.values());
+     const midX=(pts[0].x+pts[1].x)/2;
+     const midY=(pts[0].y+pts[1].y)/2;
+     const dist=Math.hypot(pts[0].x-pts[1].x,pts[0].y-pts[1].y);
+     const dx=midX-lastTouchMidX;
+     const dy=midY-lastTouchMidY;
+     lastTouchMidX=midX;
+     lastTouchMidY=midY;
+     if(Math.abs(dx)>0.1||Math.abs(dy)>0.1){
+      panLibraryPlane(dx,dy,midX,midY);
+     }
+     if(lastTouchDist>0&&Math.abs(dist-lastTouchDist)>1){
+      const zoomFactor=dist/lastTouchDist;
+      lastTouchDist=dist;
+      const offset=camera.position.clone().sub(controls.target);
+      offset.divideScalar(zoomFactor);
+      const clampedLen=Math.max(controls.minDistance,Math.min(controls.maxDistance,offset.length()));
+      offset.setLength(clampedLen);
+      camera.position.copy(controls.target).add(offset);
+      controls.update();
+      dirty=true;
+     }
+     hover.hidden=true;
+     e.stopImmediatePropagation();
+     return;
+    }
+   }else if(isPanningAisle&&amount>.4&&!latest.current.isolate){
+    const dx=e.clientX-lastPanX;
+    const dy=e.clientY-lastPanY;
+    lastPanX=e.clientX;
+    lastPanY=e.clientY;
+    if(dx!==0||dy!==0){
+     panLibraryPlane(dx,dy,e.clientX,e.clientY);
+    }
+    hover.hidden=true;
+    e.stopImmediatePropagation();
+    return;
+   }
+   if(e.buttons||amount<.5||e.pointerType==='touch'){hover.hidden=true;return;}
+   const rect=el.getBoundingClientRect(),x=e.clientX-rect.left,y=e.clientY-rect.top,index=findTarget(x,y,12);
+   hover.hidden=index<0;
+   renderer.domElement.style.cursor=index<0?'grab':'pointer';
+   if(index>=0){
+    hover.textContent=atlas.parts[index].name;
+    hover.style.left=`${Math.max(8,Math.min(x+14,el.clientWidth-260))}px`;
+    hover.style.top=`${Math.max(8,Math.min(y+18,el.clientHeight-55))}px`;
+   }
+  };
+  const cancel=(e:PointerEvent)=>{
+   if(e.pointerType==='touch'){
+    touchCoords.delete(e.pointerId);
+    if(touchCoords.size<2){isPanningAisle=false;lastTouchDist=0;}
+   }else{
+    isPanningAisle=false;
+   }
+   tap.cancel(e.pointerId);
+  };
   const up=(e:PointerEvent)=>{
-   const validTap=tap.up(e.pointerId,e.clientX,e.clientY);if(!validTap||!ready)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);
+   if(e.pointerType==='touch'){touchCoords.delete(e.pointerId);if(touchCoords.size<2){isPanningAisle=false;lastTouchDist=0;}}else{isPanningAisle=false;}const validTap=tap.up(e.pointerId,e.clientX,e.clientY);if(!validTap||!ready)return;const rect=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-rect.left)/rect.width*2-1,-(e.clientY-rect.top)/rect.height*2+1);raycaster.setFromCamera(pointer,camera);
    let nearest=Infinity,found=-1;const hasSolid=atlas.parts.some((p,i)=>p.system!=='integumentary'&&data[i*4+3]>.5);
    pickers.forEach((mesh,i)=>{if(!mesh||data[i*4+3]<.5||(hasSolid&&atlas.parts[i].system==='integumentary'))return;if(tunerPartIndices.has(i)){worldBox.setFromObject(mesh);}else{worldBox.copy(bounds[i]).translate(mesh.position);}if(!raycaster.ray.intersectBox(worldBox,hitPoint))return;const hits=raycaster.intersectObject(mesh,false);if(hits[0]&&hits[0].distance<nearest){nearest=hits[0].distance;found=i;}});
-   if(found<0&&amount>.45)found=findTarget(e.clientX-rect.left,e.clientY-rect.top,e.pointerType==='touch'?24:16);if(found>=0){hover.hidden=true;select.current(atlas.parts[found].id);}
+   if(found<0&&amount>.45)found=findTarget(e.clientX-rect.left,e.clientY-rect.top,e.pointerType==='touch'?24:16);if(found>=0){
+     hover.hidden=true;
+     select.current(atlas.parts[found].id);
+     if(amount>.4&&!latest.current.isolate){
+      const organCenter=centers[found].clone().add(new T.Vector3(data[found*4],data[found*4+1],data[found*4+2]));
+      const delta=organCenter.clone().sub(controls.target);
+      controls.target.copy(organCenter);
+      camera.position.add(delta);
+      controls.update();
+      dirty=true;
+     }
+    }
   };
-  renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',cancel);
+  renderer.domElement.addEventListener('pointerdown',down,{capture:true});renderer.domElement.addEventListener('pointermove',move,{capture:true});renderer.domElement.addEventListener('pointerup',up,{capture:true});renderer.domElement.addEventListener('pointercancel',cancel,{capture:true});
+  const preventMenu=(e:Event)=>e.preventDefault();renderer.domElement.addEventListener('contextmenu',preventMenu);
   const clock=new T.Clock();let lastExtent=-1;
   let currentThemeName=latestTheme.current;
   const animate=()=>{
@@ -180,7 +342,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
     if(themeKey!==lastThemeKey){
      lastThemeKey=themeKey;
      const p=getThemePalette(s.accentTheme??'navy_blue',latestTheme.current,s.customAccentColor??'#38bdf8');
-     renderer.setClearColor(p.bgCanvas);
+     renderer.setClearColor(p.bgCanvas);if(scene.fog)scene.fog.color.set(p.bgCanvas);
      (ground.material as T.MeshStandardMaterial).color.set(p.bgGround);
      (platform.material as T.MeshStandardMaterial).color.set(p.bgPlatform);
      (ring.material as T.MeshBasicMaterial).color.set(p.ringOuter);
@@ -229,7 +391,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
     });partTexture.needsUpdate=true;selectionTexture.needsUpdate=true;markerGeometry.attributes.position.needsUpdate=true;lastState=s;lastExtent=amount;dirty=true;
    }
    if(s.view!==lastView||s.reset!==lastReset){fit(s.view,amount);lastView=s.view;lastReset=s.reset;}
-   if(moving&&!s.isolate)fit(amount>.5?'front':s.view,Math.max(0,(amount-.3)/.7));
+   if(moving&&!s.isolate)fit(s.view,Math.max(0,(amount-.3)/.7));
    const isolateKey=s.isolate?s.selected.join(',')+':'+s.reset+':'+s.inspectorOpen+':'+camera.aspect:'';
    if(isolateKey!==lastIsolate||(s.isolate&&moving)){
     if(s.isolate){const box=new T.Box3();atlas.parts.forEach((p,i)=>{if(s.selected.includes(p.id))box.union(bounds[i].clone().translate(new T.Vector3(data[i*4],data[i*4+1],data[i*4+2])));});
@@ -237,12 +399,13 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
     }else if(lastIsolate){camera.clearViewOffset();fit(s.view,amount);}
     lastIsolate=isolateKey;
    }
-   controls.enableRotate=amount<.8;controls.mouseButtons.LEFT=amount<.8?T.MOUSE.ROTATE:T.MOUSE.PAN;controls.touches.ONE=amount<.8?T.TOUCH.ROTATE:T.TOUCH.PAN;ground.visible=platform.visible=ring.visible=innerRing.visible=amount<.5&&!s.isolate;markers.visible=amount>.75&&(s.showDots??true);controls.autoRotate=s.rotate&&!s.isolate&&amount<.4;controls.autoRotateSpeed=.65;controls.update();if(controls.autoRotate)dirty=true;
+   if(amount>.4&&!s.isolate)controls.target.z=0;
+   controls.enableRotate=true;controls.enablePan=true;ground.visible=platform.visible=ring.visible=innerRing.visible=amount<.5&&!s.isolate;markers.visible=amount>.75&&(s.showDots??true);controls.autoRotate=s.rotate&&!s.isolate&&amount<.4;controls.autoRotateSpeed=.65;controls.update();if(controls.autoRotate)dirty=true;
    if(dirty){renderer.render(scene,camera);targets=[];if(amount>.45){const hasSolid=atlas.parts.some((p,i)=>p.system!=='integumentary'&&data[i*4+3]>.5);atlas.parts.forEach((p,i)=>{if(data[i*4+3]<.5||(hasSolid&&p.system==='integumentary'))return;let left=Infinity,right=-Infinity,top=Infinity,bottom=-Infinity;for(let corner=0;corner<8;corner++){projected.set(p.bounds[(corner&1)?1:0][0]+data[i*4],p.bounds[(corner&2)?1:0][1]+data[i*4+1],p.bounds[(corner&4)?1:0][2]+data[i*4+2]).project(camera);const x=(projected.x+1)*el.clientWidth/2,y=(1-projected.y)*el.clientHeight/2;left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}projected.copy(centers[i]).add(new T.Vector3(data[i*4],data[i*4+1],data[i*4+2])).project(camera);if(projected.z< -1||projected.z>1)return;targets.push({index:i,x:(projected.x+1)*el.clientWidth/2,y:(1-projected.y)*el.clientHeight/2,left,right,top,bottom});});}dirty=false;}
 
   };animate();
   const contextLost=(e:Event)=>{e.preventDefault();onError('The 3D session was paused by your device. Reload to continue.');};renderer.domElement.addEventListener('webglcontextlost',contextLost);
-  return()=>{disposed=true;abort.abort();cancelAnimationFrame(frame);window.removeEventListener('atlas-mesh-tune',handleTune);window.removeEventListener('atlas-camera-snap',handleSnap);observer.disconnect();controls.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());scene.traverse(o=>{if(o instanceof T.Mesh&&!geometries.includes(o.geometry)){o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>m.dispose());}});env.dispose();partTexture.dispose();selectionTexture.dispose();markerGeometry.dispose();markerMaterial.dispose();hover.remove();renderer.dispose();renderer.domElement.remove();};
+  return()=>{disposed=true;abort.abort();cancelAnimationFrame(frame);window.removeEventListener('atlas-mesh-tune',handleTune);window.removeEventListener('atlas-camera-snap',handleSnap);observer.disconnect();controls.dispose();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());scene.traverse(o=>{if(o instanceof T.Mesh&&!geometries.includes(o.geometry)){o.geometry.dispose();const ms=Array.isArray(o.material)?o.material:[o.material];ms.forEach(m=>m.dispose());}});env.dispose();partTexture.dispose();selectionTexture.dispose();markerGeometry.dispose();groundAlphaTexture.dispose();markerMaterial.dispose();hover.remove();renderer.domElement.removeEventListener('pointerdown',down,{capture:true} as never);renderer.domElement.removeEventListener('pointermove',move,{capture:true} as never);renderer.domElement.removeEventListener('pointerup',up,{capture:true} as never);renderer.domElement.removeEventListener('pointercancel',cancel,{capture:true} as never);renderer.domElement.removeEventListener('contextmenu',preventMenu);renderer.dispose();renderer.domElement.remove();};
  },[atlas]);
  return <div className="scene" ref={host}/>;
 }
