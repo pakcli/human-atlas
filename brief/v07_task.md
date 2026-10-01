@@ -1,48 +1,50 @@
-# Project Task List: Deployment Verification & Reproductive Visualization Polish
+# Project Task List: Female Model Integration & Deployment Roadmap
 
 **File:** `brief/v07_task.md`  
 **Target Repo:** https://github.com/pakcli/human-atlas  
-**Status:** Ready to Execute
+**Status:** In Progress (Local Verification & Deployment Phase)
 
 ---
 
-## 1. Local Testing & Verification
-- [ ] **Task 1.1: Local Build & Serve Verification**
-  - Run `npm run build` to generate `dist/`.
-  - Serve `dist/` with `npx serve dist -l 3016` or `npx vite preview`.
-  - Verify static assets load correctly via `http://localhost:3016`.
-- [ ] **Task 1.2: Sex Switching & VRAM Stability Test**
-  - Toggle between Male and Female 5+ times to ensure 60 FPS and zero WebGL memory leaks.
-  - Verify all 15 male chunks and 10 female chunks load without network errors.
-- [ ] **Task 1.3: Cross-Sex Homology Navigation Test**
-  - In Female mode, inspect `Ovary` -> click `Switch to Male view` -> verify camera smoothly navigates to `Testis`.
-  - In Male mode, inspect `Testis` -> click `Switch to Female view` -> verify camera smoothly navigates to `Ovary`.
+## 1. Female Reproductive Architecture & Scientific Integrity
+- [x] **Task 1.1: Audit & Name All Female Reproductive Meshes in `atlas-female.json`**
+  - Verified every authentic mesh in the HuBMAP HRA v1.5 dataset.
+  - Fixed raw source naming bugs:
+    - `VH_F_cervicovaginal_junction` ('-') ➔ **"Cervicovaginal junction"** (`FMA:19984`).
+    - `VH_F_cornua` ('-') ➔ **"Uterine cornu"** (`FMA:18251`).
+- [x] **Task 1.2: Eliminate Synthetic Geometry to Preserve Medical Truth**
+  - Tested and promptly reverted procedural synthetic cylinder/sphere meshes (`scripts/complete-female-vagina.mjs`).
+  - Restored the 100% authentic HuBMAP HRA dataset (888 meshes, 1,073 concepts, 1,809,796 triangles).
+  - Maintained scientific credibility and CC BY 4.0 data integrity.
+- [x] **Task 1.3: Standardized Educational Definitions & Homology System**
+  - Implemented identical definitional sheets for both sexes in `app/anatomy-dictionary.ts`.
+  - Added full biological homology pairs (Ovary ↔ Testis, Clitoris ↔ Penis, Labia majora ↔ Scrotum, Skene's gland ↔ Prostate).
+  - Categorized all structures under the Venn diagram taxonomy (`shared`, `male_only`, `female_only`).
+  - Added detailed educational descriptions for suspensory peritoneal folds (broad ligament, round ligament, mesosalpinx).
 
 ---
 
-## 2. Female Reproductive & Private Parts Completeness
-- [x] **Task 2.1: Audit & Name All Female Reproductive Meshes in `atlas-female.json`**
-  - Verified every reproductive mesh in the source dataset is fully accessible:
-    - Vagina (`VH_F_vagina`)
-    - Uterine cervix, internal & external cervical os (`VH_F_cervix`, `VH_F_internal_cervical_os`, `VH_F_external_cervical_os`)
-    - Uterine body, fundus, and walls (`VH_F_body_of_uterus`, `VH_F_fundus_of_uterus`, `VH_F_posterior_wall_of_uterus`, `VH_F_anterior_wall_of_uterus`, `VH_F_lower_uterine_segment`)
-    - Fixed unassigned `'-'` labels in source data: named `VH_F_cervicovaginal_junction` as **"Cervicovaginal junction"** and `VH_F_cornua` as **"Uterine cornu"**.
-    - Left & right ovaries and suspensory/ovarian ligaments (`VH_F_left_ovary`, `VH_F_right_ovary`, `VH_F_suspensory_ligament_*`, `VH_F_ovarian_ligament_*`).
-    - Fallopian tubes (ampulla, isthmus, infundibulum, and fimbriae).
-    - Round ligaments, uterosacral ligaments, and cardinal ligaments.
-- [ ] **Task 2.2: External Genitalia (Vulva) Context & Body Surface Preservation**
-  - In the source HuBMAP dataset, external genitalia (vulva, labia, clitoral hood) are part of the outer integumentary surface mesh (`VH_F_skin`).
-  - Configure the viewer so the pelvic/perineal surface outline remains subtly visible (semi-transparent ~10% opacity) in Female mode, clearly showing where the vaginal canal meets the external anatomy.
-- [x] **Task 2.3: Explanatory Context Note for Peritoneal Folds & Private Parts**
-  - Added educational descriptions in `app/anatomy-dictionary.ts` for broad ligament, mesosalpinx, round ligament, cardinal/uterosacral ligaments, cornu, and cervicovaginal junction explaining why they appear as protective suspensory sheets anchoring the reproductive organs in vivo.
+## 2. Local Testing & Verification
+- [x] **Task 2.1: Local Build & Serve Verification**
+  - `npm run check` (TypeScript typecheck: 0 errors).
+  - `npm run build` (production Vite build: 0 errors).
+  - Serving preview at `http://localhost:3016`.
+- [ ] **Task 2.2: Sex Switching & WebGL Stability Verification**
+  - Toggle between Male (BodyParts3D) and Female (HuBMAP) via `[ ♂ Male | ♀ Female ]`.
+  - Ensure zero memory leaks or WebGL buffer crashes across repeated toggles.
+  - Verify URL query synchronization (`?sex=female` and `?sex=male`).
+- [ ] **Task 2.3: Homology Navigation Verification**
+  - In Female mode, inspect `Ovary` -> click `Switch to Male view` -> camera navigates to `Testis`.
+  - In Male mode, inspect `Testis` -> click `Switch to Female view` -> camera navigates to `Ovary`.
 
 ---
 
-## 3. Deployment Preparation (Firebase Static Hosting)
+## 3. Production Deployment (Firebase Static Hosting)
 - [ ] **Task 3.1: Verify Firebase Configuration (`firebase.json`)**
-  - Ensure `hosting.public` points to `"dist"`.
-  - Ensure `cleanUrls: true` and SPA rewrite `/` -> `dist/index.html`.
-- [ ] **Task 3.2: Verify Gzip / Brotli Caching Headers**
-  - Ensure `firebase.json` serves `.bin.gz` with `Content-Encoding: gzip` if needed or standard static caching.
-- [ ] **Task 3.3: Production Deployment**
-  - Run `firebase deploy --only hosting` to publish live to Firebase.
+  - Ensure `hosting.public` correctly points to `"dist"`.
+  - Validate SPA rewrite (`"rewrites": [ { "source": "**", "destination": "/index.html" } ]`).
+- [ ] **Task 3.2: Static Asset Headers & Cache Rules**
+  - Verify caching headers for `.bin` and `.bin.gz` chunks for high-speed multi-part loading.
+- [ ] **Task 3.3: Publish Live Site**
+  - Deploy with `firebase deploy --only hosting`.
+  - Verify public production URL.
