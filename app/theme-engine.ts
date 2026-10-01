@@ -333,6 +333,8 @@ export function applyThemeToDom(palette: ThemePalette) {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
   root.style.setProperty('--accent-primary', palette.primaryAccent);
+  root.style.setProperty('--primary', palette.primaryAccent);
+  root.style.setProperty('--color-primary', palette.primaryAccent);
   root.style.setProperty('--bg-canvas', palette.bgCanvas);
   root.style.setProperty('--panel-bg', palette.panelBg);
   root.style.setProperty('--panel-border', palette.panelBorder);
