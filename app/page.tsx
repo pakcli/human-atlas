@@ -94,8 +94,9 @@ export default function Home(){
     window.history.replaceState({},'',url.toString());
    }
   }
+  setError('');
   const abort=new AbortController();
-  const file=sex==='female'?'/models/female-atlas.json':'/models/male-atlas.json';
+  const file=sex==='female'?'/models/atlas-female.json':'/models/atlas.json';
   fetch(file,{signal:abort.signal})
    .then(r=>r.json() as Promise<Atlas>)
    .then(a=>{
