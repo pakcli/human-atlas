@@ -44,6 +44,26 @@ This tests the exact output that Firebase Hosting or Vercel will serve to public
 
 ---
 
+### Option C: Rebuild & Preview in One PS1 Line (PowerShell)
+Execute typecheck, asset build, and local server launch in a single copy-paste command:
+```powershell
+npm run check; npm run build; npx vite preview --port 3016
+```
+*(Or with `npx serve`)*:
+```powershell
+npm run check; npm run build; npx serve dist -l 3016
+```
+
+---
+
+### Option D: Rebuild & Deploy to Firebase in One PS1 Line (PowerShell)
+Execute typecheck, asset build, and live cloud deployment to Firebase Hosting in a single command:
+```powershell
+npm run check; npm run build; firebase deploy --only hosting
+```
+
+---
+
 ## 2. Test Verification Checklist
 
 When opening `http://localhost:3016`:
