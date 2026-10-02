@@ -34,7 +34,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    camera.position.set(latest.current.cameraPos[0],latest.current.cameraPos[1],latest.current.cameraPos[2]);
    controls.target.set(latest.current.cameraTarget[0],latest.current.cameraTarget[1],latest.current.cameraTarget[2]);
   }else{
-   camera.position.set(1.32,1.08,3.77);controls.target.set(0,.86,0);
+   camera.position.set(1.10,0.92,3.18);controls.target.set(0,.86,0);
   }
   controls.enableDamping=true;controls.dampingFactor=.085;controls.minDistance=.07;controls.maxDistance=40;controls.maxPolarAngle=Math.PI*.96;
   controls.screenSpacePanning=true;controls.enablePan=true;controls.enableRotate=true;
@@ -277,53 +277,62 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    function fit(view:string,expAmount=0){
     const aspect=camera.aspect,mobile=el.clientWidth<768;
 
-    // 1. Calculate top navbar clearance dynamically + fallback
-    const headerRect=typeof document!=='undefined'?document.querySelector('.identity')?.getBoundingClientRect():null;
-    const sexRect=typeof document!=='undefined'?document.querySelector('.identity .sex-toggle-group')?.getBoundingClientRect():null;
-    const topActionsRect=typeof document!=='undefined'?document.querySelector('.top-actions')?.getBoundingClientRect():null;
+    // 1. Calculate top & bottom clearance dynamically
+    let topInset: number;
+    let bottomInset: number;
 
-    let topBottom=0;
-    if(sexRect&&sexRect.bottom>0)topBottom=Math.max(topBottom,sexRect.bottom);
-    if(headerRect&&headerRect.bottom>0)topBottom=Math.max(topBottom,headerRect.bottom);
-    if(topActionsRect&&topActionsRect.bottom>0)topBottom=Math.max(topBottom,topActionsRect.bottom);
+    if (mobile) {
+      const headerRect = typeof document !== 'undefined' ? document.querySelector('.identity')?.getBoundingClientRect() : null;
+      const sexRect = typeof document !== 'undefined' ? document.querySelector('.identity .sex-toggle-group')?.getBoundingClientRect() : null;
+      const topActionsRect = typeof document !== 'undefined' ? document.querySelector('.top-actions')?.getBoundingClientRect() : null;
 
-    const defaultTopInset=mobile?(el.clientHeight<520?60:108):76;
-    const topInset=Math.max(defaultTopInset,Math.ceil(topBottom)+(mobile?18:22));
+      let topBottom = 0;
+      if (sexRect && sexRect.bottom > 0) topBottom = Math.max(topBottom, sexRect.bottom);
+      if (headerRect && headerRect.bottom > 0) topBottom = Math.max(topBottom, headerRect.bottom);
+      if (topActionsRect && topActionsRect.bottom > 0) topBottom = Math.max(topBottom, topActionsRect.bottom);
 
-    // 2. Calculate bottom clearance dynamically + fallback
-    const sheetEl=typeof document!=='undefined'?document.querySelector('.mobile-bottom-sheet'):null;
-    let bottomInset=mobile?(el.clientHeight<520?32:64):56;
-    if(sheetEl){
-     const sheetRect=sheetEl.getBoundingClientRect();
-     if(sheetRect.top>0&&sheetRect.top<el.clientHeight){
-      bottomInset=Math.max(bottomInset,el.clientHeight-sheetRect.top+14);
-     }
+      const defaultTopInset = el.clientHeight < 520 ? 60 : 108;
+      topInset = Math.max(defaultTopInset, Math.ceil(topBottom) + 18);
+
+      const sheetEl = typeof document !== 'undefined' ? document.querySelector('.mobile-bottom-sheet') : null;
+      bottomInset = el.clientHeight < 520 ? 32 : 64;
+      if (sheetEl) {
+        const sheetRect = sheetEl.getBoundingClientRect();
+        if (sheetRect.top > 0 && sheetRect.top < el.clientHeight) {
+          bottomInset = Math.max(bottomInset, el.clientHeight - sheetRect.top + 14);
+        }
+      }
+    } else {
+      // Desktop: tidy fit height without excessive top/bottom padding
+      // Top center caption is at top: 26px (~45px bottom), footer guide is at bottom: 20px
+      topInset = 52;
+      bottomInset = 42;
     }
 
-    const reservedHeight=topInset+bottomInset;
-    const reservedWidth=mobile?84:360;
+    const reservedHeight = topInset + bottomInset;
+    const reservedWidth = mobile ? 84 : 0;
 
-    const availableHeight=Math.max(140,el.clientHeight-reservedHeight);
-    const availableWidth=Math.max(140,el.clientWidth-reservedWidth);
-    const availableAspect=availableWidth/availableHeight;
-    const halfFovRad=T.MathUtils.degToRad(camera.fov/2);
+    const availableHeight = Math.max(140, el.clientHeight - reservedHeight);
+    const availableWidth = Math.max(140, el.clientWidth - reservedWidth);
+    const availableAspect = availableWidth / availableHeight;
+    const halfFovRad = T.MathUtils.degToRad(camera.fov / 2);
 
-    const curW=T.MathUtils.lerp(0.54,packingWidth,expAmount);
-    const curH=T.MathUtils.lerp(1.723,packingHeight,expAmount);
+    const curW = T.MathUtils.lerp(0.54, packingWidth, expAmount);
+    const curH = T.MathUtils.lerp(1.723, packingHeight, expAmount);
 
-    const distH=(curH/(2*Math.tan(halfFovRad)))*(el.clientHeight/availableHeight);
-    const distW=((curW/availableAspect)/(2*Math.tan(halfFovRad)))*(el.clientHeight/availableHeight);
-    const requiredDist=Math.max(distH,distW)*(mobile?1.08:1.15);
+    const distH = (curH / (2 * Math.tan(halfFovRad))) * (el.clientHeight / availableHeight);
+    const distW = ((curW / availableAspect) / (2 * Math.tan(halfFovRad))) * (el.clientHeight / availableHeight);
+    const requiredDist = Math.max(distH, distW) * (mobile ? 1.06 : 1.03);
 
-    const distance=Math.max(mobile?3.4:4.0,requiredDist);
+    const distance = Math.max(mobile ? 3.3 : 2.8, requiredDist);
 
-    const currentDock=latestDockSide.current||'right';
+    const currentDock = latestDockSide.current || 'right';
     const frustumH=2*distance*Math.tan(halfFovRad);
     const frustumW=frustumH*camera.aspect;
 
-    // Horizontal dock clearance
-    const pixelShiftX=mobile?(currentDock==='right'?-32:32):-38;
-    const worldShiftX=(pixelShiftX/el.clientWidth)*frustumW;
+    // Horizontal clearance: on desktop, model MUST be perfectly centered on the screen (targetX = 0)
+    const pixelShiftX=mobile?(currentDock==='right'?-16:16):0;
+    const worldShiftX=mobile?(pixelShiftX/el.clientWidth)*frustumW:0;
 
     // Vertical top navbar vs bottom clearance:
     // Safe center in screen pixels is topInset + availableHeight / 2 = (topInset + el.clientHeight - bottomInset) / 2
@@ -334,7 +343,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
 
     const baseTargetY=expAmount>.1?.88:0.86;
     const targetY=baseTargetY+worldShiftY;
-    const targetX=worldShiftX+(expAmount>.1&&el.clientWidth>767?-packingWidth*.06:0);
+    const targetX=mobile?worldShiftX:0;
 
     controls.target.set(targetX,targetY,0);
 

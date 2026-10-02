@@ -332,10 +332,6 @@ export function loadSessionFromLocalStorage(): Partial<SerializedSession> | null
     }
     if (parsed.camera && Array.isArray(parsed.camera.pos) && Array.isArray(parsed.camera.target)) {
       res.camera = parsed.camera;
-      if (res.state) {
-        res.state.cameraPos = parsed.camera.pos;
-        res.state.cameraTarget = parsed.camera.target;
-      }
     }
     return res;
   } catch {

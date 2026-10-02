@@ -47,6 +47,10 @@ function getInitialSession():{
  ...(merged?.state??{}),
  reset:0,
  };
+ if(!fromUrl?.camera){
+  delete state.cameraPos;
+  delete state.cameraTarget;
+ }
  return{theme,sex,state};
 }
 
@@ -578,15 +582,6 @@ export default function Home(){
     onClick={handleShare}
    >
     {copied?<Check size={18}/>:<Share2 size={18}/>}
-   </Button>
-   <Button
-    variant="ghost"
-    className={`icon-button ${cleanUI?'active':''} desktop-only`}
-    aria-label="Toggle clean UI"
-    title="Toggle clean UI (Zen mode)"
-    onClick={()=>setCleanUI(v=>!v)}
-   >
-    <Eye size={18}/>
    </Button>
    <Button variant="ghost" className="icon-button" aria-label="About this atlas" onClick={()=>{setDetails(false);setPanel(null);setAbout(true);}}>
     <Info size={18}/>
