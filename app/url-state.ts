@@ -150,9 +150,9 @@ export function serializeStateToUrl(session: SerializedSession): string {
     p.set('view', state.view);
   }
 
-  // 8. Inspection dots toggle
-  if (state.showDots === false) {
-    p.set('dots', '0');
+  // 8. Inspection dots toggle (default is off, encode if turned on)
+  if (state.showDots === true) {
+    p.set('dots', '1');
   }
 
   // 9. Opacity customizations

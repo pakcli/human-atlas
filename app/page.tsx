@@ -23,7 +23,7 @@ const defaultState:SceneState={
  view:'three-quarter',
  rotate:false,
  reset:0,
- showDots:true,
+ showDots:false,
  opacities:{...DEFAULT_OPACITIES},
  accentTheme:'navy_blue',
  customAccentColor:'#38bdf8',
@@ -353,7 +353,7 @@ export default function Home(){
  };
 
  return <main className={`studio ${cleanUI?'clean-ui-mode':''}`} data-mobile-sheet={mobileSheetMode} data-clean-ui={cleanUI}>
-  {atlas&&<AnatomyScene atlas={atlas} state={{...state,inspectorOpen:details&&selectedParts.length>0}} theme={theme} dockSide={dockSide} onSelect={choosePart} onProgress={n=>{setProgress(n);if(n===100)setError('');}} onError={setError}/>}
+  {atlas&&<AnatomyScene atlas={atlas} state={{...state,inspectorOpen:details&&selectedParts.length>0}} theme={theme} dockSide={dockSide} mobileSheetMode={mobileSheetMode} onSelect={choosePart} onProgress={n=>{setProgress(n);if(n===100)setError('');}} onError={setError}/>}
   <ModelTuner
    sex={sex}
    onIsolateBones={()=>{
@@ -499,6 +499,65 @@ export default function Home(){
    >
     {theme==='dark'?<Sun size={18}/>:<Moon size={18}/>}
    </Button>
+   <div className="accent-theme-picker header-accent-picker" ref={accentPickerRef}>
+    <button
+     type="button"
+     className={`icon-button accent-picker-icon-btn ${accentPickerOpen?'active':''}`}
+     onClick={()=>setAccentPickerOpen(prev=>!prev)}
+     title={`Theme color: ${THEME_OPTIONS.find(t=>t.id===state.accentTheme)?.label??'Default'}`}
+     aria-label="Select accent theme"
+    >
+     <span
+      className="accent-circle-swatch"
+      style={{
+       background:state.accentTheme==='custom'
+        ?(state.customAccentColor??'#38bdf8')
+        :(THEME_OPTIONS.find(t=>t.id===state.accentTheme)?.[theme==='dark'?'dotColorDark':'dotColorLight']??'#0284c7')
+      }}
+     />
+    </button>
+
+    {accentPickerOpen&&(
+     <div className="accent-dropdown glass" role="menu">
+      {THEME_OPTIONS.map(opt=>{
+       const isActive=(state.accentTheme??'navy_blue')===opt.id;
+       return (
+        <button
+         key={opt.id}
+         type="button"
+         className={`accent-dropdown-item ${isActive?'active':''}`}
+         onClick={()=>{
+          setState(s=>({...s,accentTheme:opt.id}));
+          if(opt.id!=='custom')setAccentPickerOpen(false);
+         }}
+        >
+         <span className="accent-swatch-pair">
+          <span className="swatch-circle" style={{background:opt.dotColorDark}} title="Dark tone"/>
+          <span className="swatch-circle" style={{background:opt.dotColorLight}} title="Light tone"/>
+         </span>
+         <span style={{flex:1}}>{opt.label}</span>
+         {isActive&&<Check size={13}/>}
+        </button>
+       );
+      })}
+
+      {state.accentTheme==='custom'&&(
+       <div className="custom-color-row">
+        <span>Custom Color</span>
+        <input
+         type="color"
+         className="custom-color-input"
+         value={state.customAccentColor??'#38bdf8'}
+         onChange={e=>{
+          const col=e.target.value;
+          setState(s=>({...s,customAccentColor:col}));
+         }}
+        />
+       </div>
+      )}
+     </div>
+    )}
+   </div>
    <Button
     variant="ghost"
     className={`icon-button ${isFullscreen?'active':''}`}
@@ -696,9 +755,9 @@ export default function Home(){
    {/* 2. Inspection dots toggle */}
    <Button
     variant="ghost"
-    className={`deck-col-btn ${state.showDots!==false?'active':''}`}
-    onClick={()=>setState(s=>({...s,showDots:s.showDots===false?true:false}))}
-    title={state.showDots===false?'Turn on inspection dots':'Bare mode: hide inspection dots'}
+    className={`deck-col-btn ${state.showDots?'active':''}`}
+    onClick={()=>setState(s=>({...s,showDots:!s.showDots}))}
+    title={state.showDots?'Hide inspection dots':'Show inspection dots'}
     aria-label="Toggle inspection dots"
    >
     <CircleDot size={15}/>
@@ -785,74 +844,12 @@ export default function Home(){
    </div>
   </aside>
 
-  {/* Studio Bottom Bar: Navigation Guide + Theme Dropdown on far right */}
+  {/* Studio Bottom Bar: Navigation Guide */}
   <footer className="studio-footer">
    <div className="footer-right">
     <span className="footer-guide">
      Left-drag to orbit · Right-drag to pan · Tap to inspect
     </span>
-
-    <div className="accent-theme-picker" ref={accentPickerRef}>
-     <button
-      type="button"
-      className="accent-picker-trigger glass"
-      onClick={()=>setAccentPickerOpen(prev=>!prev)}
-      title="Accent theme"
-      aria-label="Select accent theme"
-     >
-      <span
-       className="accent-dot"
-       style={{
-        background:state.accentTheme==='custom'
-         ?(state.customAccentColor??'#38bdf8')
-         :(THEME_OPTIONS.find(t=>t.id===state.accentTheme)?.[theme==='dark'?'dotColorDark':'dotColorLight']??'#0284c7')
-       }}
-      />
-      <span>{THEME_OPTIONS.find(t=>t.id===state.accentTheme)?.label??'Theme'}</span>
-      {accentPickerOpen?<ChevronDown size={12}/>:<ChevronUp size={12}/>}
-     </button>
-
-     {accentPickerOpen&&(
-      <div className="accent-dropdown glass" role="menu">
-       {THEME_OPTIONS.map(opt=>{
-        const isActive=(state.accentTheme??'navy_blue')===opt.id;
-        return (
-         <button
-          key={opt.id}
-          type="button"
-          className={`accent-dropdown-item ${isActive?'active':''}`}
-          onClick={()=>{
-           setState(s=>({...s,accentTheme:opt.id}));
-           if(opt.id!=='custom')setAccentPickerOpen(false);
-          }}
-         >
-          <span className="accent-swatch-pair">
-           <span className="swatch-circle" style={{background:opt.dotColorDark}} title="Dark tone"/>
-           <span className="swatch-circle" style={{background:opt.dotColorLight}} title="Light tone"/>
-          </span>
-          <span style={{flex:1}}>{opt.label}</span>
-          {isActive&&<Check size={13}/>}
-         </button>
-        );
-       })}
-
-       {state.accentTheme==='custom'&&(
-        <div className="custom-color-row">
-         <span>Custom Color</span>
-         <input
-          type="color"
-          className="custom-color-input"
-          value={state.customAccentColor??'#38bdf8'}
-          onChange={e=>{
-           const col=e.target.value;
-           setState(s=>({...s,customAccentColor:col}));
-          }}
-         />
-        </div>
-       )}
-      </div>
-     )}
-    </div>
    </div>
   </footer>
 
@@ -907,6 +904,15 @@ export default function Home(){
       title="Fit all to frame"
      >
       <Focus size={13}/>
+     </button>
+     <button
+      type="button"
+      className={`dock-btn ${state.showDots?'active':''}`}
+      onClick={()=>setState(s=>({...s,showDots:!s.showDots}))}
+      aria-label="Toggle inspection dots"
+      title={state.showDots?'Hide inspection dots':'Show inspection dots'}
+     >
+      <CircleDot size={13}/>
      </button>
      <div className="dock-divider"/>
      {/* Explode Toggle in Side Dock */}
@@ -1171,6 +1177,15 @@ export default function Home(){
         title={state.explode > 0.05 ? 'Assemble model' : 'Explode anatomy'}
        >
         <span>💥 {Math.round(state.explode*100)}%</span>
+       </button>
+       <button
+        type="button"
+        className={`tier1-cam-btn ${state.showDots?'active':''}`}
+        onClick={()=>setState(s=>({...s,showDots:!s.showDots}))}
+        aria-label="Toggle inspection dots"
+        title={state.showDots?'Hide inspection dots':'Show inspection dots'}
+       >
+        <CircleDot size={13}/>
        </button>
        <button
         type="button"

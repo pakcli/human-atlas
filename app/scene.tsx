@@ -8,18 +8,19 @@ import {decodeModelResponse} from './model-download';
 import {PointerTap} from './pointer-tap';
 import {SYSTEMS,DEFAULT_OPACITIES,type Atlas,type SceneState,type SystemId} from './anatomy';
 import {getThemePalette} from './theme-engine';
-interface Props {atlas:Atlas;state:SceneState;onSelect:(id:string)=>void;onProgress:(n:number)=>void;onError:(s:string)=>void;theme?:"light"|"dark";dockSide?:"left"|"right"}
-export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,theme="light",dockSide="right"}:Props){
+interface Props {atlas:Atlas;state:SceneState;onSelect:(id:string)=>void;onProgress:(n:number)=>void;onError:(s:string)=>void;theme?:"light"|"dark";dockSide?:"left"|"right";mobileSheetMode?:"closed"|"split"|"full"}
+export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,theme="light",dockSide="right",mobileSheetMode="closed"}:Props){
  const latestDockSide=useRef(dockSide);latestDockSide.current=dockSide;
  const latestTheme=useRef(theme);latestTheme.current=theme;
+ const latestSheetMode=useRef(mobileSheetMode);latestSheetMode.current=mobileSheetMode;
  const host=useRef<HTMLDivElement>(null),latest=useRef(state),select=useRef(onSelect);
  latest.current=state;select.current=onSelect;
  const triggerRenderRef=useRef<()=>void>(()=>{});
  useEffect(()=>{
   triggerRenderRef.current();
- },[state,theme,dockSide]);
+ },[state,theme,dockSide,mobileSheetMode]);
  useEffect(()=>{
-  const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView='',lastReset=-1,lastIsolate='',layoutKey='',amount=latest.current.explode;
+  const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView='',lastReset=-1,lastSheetMode=latestSheetMode.current||'closed',lastIsolate='',layoutKey='',amount=latest.current.explode;
   let lastState:SceneState|null=null,lastThemeKey='';
   triggerRenderRef.current=()=>{dirty=true;};
   const abort=new AbortController();
@@ -272,34 +273,70 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    groups.forEach((gs,system)=>{const geometry=mergeGeometries(gs,false);if(!geometry)throw new Error('Could not assemble anatomy geometry.');geometries.push(geometry);const mesh=new T.Mesh(geometry,isChunkFRC?chunk10Material:mats.get(system as never));mesh.frustumCulled=false;if(system==='integumentary')mesh.renderOrder=100;if(isChunkFRC){tunerGroup.add(mesh);}else{scene.add(mesh);}});
    lastState=null;loaded++;onProgress(Math.round(loaded/atlas.chunks.length*100));dirty=true;
   };
-  (async()=>{try{let cursor=0;await Promise.all(Array.from({length:3},async()=>{while(cursor<atlas.chunks.length){const i=cursor++;await loadChunk(i);}}));if(!disposed){ready=true;dirty=true;}}catch(e){if(!disposed)onError(e instanceof Error?e.message:'Could not load the anatomy.');}})();
-  const fit=(view:string,expAmount=0)=>{
+   (async()=>{try{let cursor=0;await Promise.all(Array.from({length:3},async()=>{while(cursor<atlas.chunks.length){const i=cursor++;await loadChunk(i);}}));if(!disposed){ready=true;dirty=true;if(!latest.current.cameraPos)fit(latest.current.view,amount);}}catch(e){if(!disposed)onError(e instanceof Error?e.message:'Could not load the anatomy.');}})();
+   function fit(view:string,expAmount=0){
     const aspect=camera.aspect,mobile=el.clientWidth<768;
-    const reservedHeight=mobile?(el.clientHeight<520?30:96):270;
+
+    // 1. Calculate top navbar clearance dynamically + fallback
+    const headerRect=typeof document!=='undefined'?document.querySelector('.identity')?.getBoundingClientRect():null;
+    const sexRect=typeof document!=='undefined'?document.querySelector('.identity .sex-toggle-group')?.getBoundingClientRect():null;
+    const topActionsRect=typeof document!=='undefined'?document.querySelector('.top-actions')?.getBoundingClientRect():null;
+
+    let topBottom=0;
+    if(sexRect&&sexRect.bottom>0)topBottom=Math.max(topBottom,sexRect.bottom);
+    if(headerRect&&headerRect.bottom>0)topBottom=Math.max(topBottom,headerRect.bottom);
+    if(topActionsRect&&topActionsRect.bottom>0)topBottom=Math.max(topBottom,topActionsRect.bottom);
+
+    const defaultTopInset=mobile?(el.clientHeight<520?60:108):76;
+    const topInset=Math.max(defaultTopInset,Math.ceil(topBottom)+(mobile?18:22));
+
+    // 2. Calculate bottom clearance dynamically + fallback
+    const sheetEl=typeof document!=='undefined'?document.querySelector('.mobile-bottom-sheet'):null;
+    let bottomInset=mobile?(el.clientHeight<520?32:64):56;
+    if(sheetEl){
+     const sheetRect=sheetEl.getBoundingClientRect();
+     if(sheetRect.top>0&&sheetRect.top<el.clientHeight){
+      bottomInset=Math.max(bottomInset,el.clientHeight-sheetRect.top+14);
+     }
+    }
+
+    const reservedHeight=topInset+bottomInset;
     const reservedWidth=mobile?84:360;
 
-    const availableHeight=Math.max(160,el.clientHeight-reservedHeight);
-    const availableWidth=Math.max(160,el.clientWidth-reservedWidth);
+    const availableHeight=Math.max(140,el.clientHeight-reservedHeight);
+    const availableWidth=Math.max(140,el.clientWidth-reservedWidth);
     const availableAspect=availableWidth/availableHeight;
     const halfFovRad=T.MathUtils.degToRad(camera.fov/2);
 
     const curW=T.MathUtils.lerp(0.54,packingWidth,expAmount);
     const curH=T.MathUtils.lerp(1.723,packingHeight,expAmount);
 
-    const distH=curH/(2*Math.tan(halfFovRad))*(el.clientHeight/availableHeight);
-    const distW=(curW/availableAspect)/(2*Math.tan(halfFovRad))*(el.clientHeight/availableHeight);
-    const requiredDist=Math.max(distH,distW)*1.18;
+    const distH=(curH/(2*Math.tan(halfFovRad)))*(el.clientHeight/availableHeight);
+    const distW=((curW/availableAspect)/(2*Math.tan(halfFovRad)))*(el.clientHeight/availableHeight);
+    const requiredDist=Math.max(distH,distW)*(mobile?1.08:1.15);
 
-    const normalDistance=mobile?Math.max(3.8,1.8*el.clientHeight/Math.max(160,el.clientHeight-(el.clientHeight<520?30:160))/(2*Math.tan(halfFovRad))):4;
-    const distance=Math.max(normalDistance,requiredDist);
+    const distance=Math.max(mobile?3.4:4.0,requiredDist);
 
     const currentDock=latestDockSide.current||'right';
-    const frustumW=2*distance*Math.tan(halfFovRad)*camera.aspect;
+    const frustumH=2*distance*Math.tan(halfFovRad);
+    const frustumW=frustumH*camera.aspect;
+
+    // Horizontal dock clearance
     const pixelShiftX=mobile?(currentDock==='right'?-32:32):-38;
     const worldShiftX=(pixelShiftX/el.clientWidth)*frustumW;
 
+    // Vertical top navbar vs bottom clearance:
+    // Safe center in screen pixels is topInset + availableHeight / 2 = (topInset + el.clientHeight - bottomInset) / 2
+    // Offset from screen center (el.clientHeight / 2) is (topInset - bottomInset) / 2
+    const pixelShiftY=(topInset-bottomInset)/2;
+    // Moving target UP in 3D world (positive worldShiftY) moves the projected model DOWN on screen
+    const worldShiftY=(pixelShiftY/el.clientHeight)*frustumH;
+
+    const baseTargetY=expAmount>.1?.88:0.86;
+    const targetY=baseTargetY+worldShiftY;
     const targetX=worldShiftX+(expAmount>.1&&el.clientWidth>767?-packingWidth*.06:0);
-    controls.target.set(targetX,expAmount>.1?.88:(mobile?.85:.86),0);
+
+    controls.target.set(targetX,targetY,0);
 
     const direction=view==='front'?new T.Vector3(0,.02,1):view==='back'?new T.Vector3(0,.02,-1):view==='side'?new T.Vector3(1,.02,0):new T.Vector3(.35,.06,1).normalize();
     camera.position.copy(controls.target).addScaledVector(direction,distance);
@@ -511,7 +548,8 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
      markerPositions.set(data[i*4+3]>.5?[c.x+dx,c.y+dy,c.z+dz]:[10000,10000,10000],i*3);const mesh=pickers[i];if(mesh){mesh.position.set(dx,dy,dz);mesh.updateMatrix();mesh.updateMatrixWorld(true);}
     });partTexture.needsUpdate=true;selectionTexture.needsUpdate=true;markerGeometry.attributes.position.needsUpdate=true;lastState=s;lastExtent=amount;dirty=true;
    }
-   if(s.view!==lastView||s.reset!==lastReset){fit(s.view,amount);lastView=s.view;lastReset=s.reset;}
+   const curSheetMode=latestSheetMode.current||'closed';
+   if(s.view!==lastView||s.reset!==lastReset||curSheetMode!==lastSheetMode){fit(s.view,amount);lastView=s.view;lastReset=s.reset;lastSheetMode=curSheetMode;}
    if(moving&&!s.isolate)fit(s.view,amount);
    const isolateKey=s.isolate?s.selected.join(',')+':'+s.reset+':'+s.inspectorOpen+':'+camera.aspect:'';
    if(isolateKey!==lastIsolate||(s.isolate&&moving)){
@@ -527,7 +565,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
     platform.visible=ring.visible=innerRing.visible=nextPlatform;
     dirty=true;
    }
-   const nextDots=amount>.75&&(s.showDots??true);
+   const nextDots=amount>.75&&(s.showDots??false);
    if(markers.visible!==nextDots){
     markers.visible=nextDots;
     dirty=true;
