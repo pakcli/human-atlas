@@ -47,7 +47,13 @@ function getInitialSession():{
  ...(merged?.state??{}),
  reset:0,
  };
- if(!fromUrl?.camera){
+ if (fromUrl?.camera) {
+  state.cameraPos = fromUrl.camera.pos;
+  state.cameraTarget = fromUrl.camera.target;
+ } else if (!fromUrl && fromStorage?.camera) {
+  state.cameraPos = fromStorage.camera.pos;
+  state.cameraTarget = fromStorage.camera.target;
+ } else {
   delete state.cameraPos;
   delete state.cameraTarget;
  }
@@ -61,6 +67,14 @@ export default function Home(){
  const [expandedSystems,setExpandedSystems]=useState<Set<SystemId>>(new Set(['integumentary']));
 
  const initialSession=useRef(getInitialSession());
+ const currentCameraRef=useRef<{pos:[number,number,number];target:[number,number,number]}|undefined>(
+  initialSession.current.state.cameraPos && initialSession.current.state.cameraTarget
+   ? { pos: initialSession.current.state.cameraPos, target: initialSession.current.state.cameraTarget }
+   : undefined
+ );
+ const isFirstSexLoadRef=useRef(true);
+ const urlSyncTimerRef=useRef<ReturnType<typeof setTimeout>|null>(null);
+
  const [theme,setTheme]=useState<'light'|'dark'>(()=>initialSession.current.theme);
  const [navState,setNavState]=useState<{overflowX:boolean;overflowY:boolean;tx:number;ty:number}>({
   overflowX:false,
@@ -178,14 +192,37 @@ export default function Home(){
   applyThemeToDom(palette);
  },[state.accentTheme,state.customAccentColor,theme]);
 
- // Debounced auto-save to localStorage whenever state/sex/theme changes
- useEffect(()=>{
-  const id=setTimeout(()=>{
-   const cam=(window as any).__atlas_camera as {pos:[number,number,number];target:[number,number,number]}|undefined;
-   saveSessionToLocalStorage({sex,theme,state,camera:cam});
-  },800);
-  return ()=>clearTimeout(id);
- },[sex,theme,state]);
+ const scheduleUrlSync = () => {
+  if (typeof window === 'undefined') return;
+  if (urlSyncTimerRef.current) clearTimeout(urlSyncTimerRef.current);
+  urlSyncTimerRef.current = setTimeout(() => {
+   const cam = currentCameraRef.current ?? (window as any).__atlas_camera;
+   const url = serializeStateToUrl({ sex, theme, state, camera: cam });
+   window.history.replaceState({}, '', url);
+   saveSessionToLocalStorage({ sex, theme, state, camera: cam });
+  }, 200);
+ };
+
+ // Listen for real-time camera manipulation (orbit, pan, zoom) from 3D viewport
+ useEffect(() => {
+  const handleCam = (e: Event) => {
+   const d = (e as CustomEvent).detail;
+   if (d?.pos && d?.target) {
+    currentCameraRef.current = { pos: d.pos, target: d.target };
+    scheduleUrlSync();
+   }
+  };
+  window.addEventListener('atlas-camera-change', handleCam);
+  return () => window.removeEventListener('atlas-camera-change', handleCam);
+ }, [sex, theme, state]);
+
+ // Keep URL and localStorage updated when state, sex, or theme changes
+ useEffect(() => {
+  scheduleUrlSync();
+  return () => {
+   if (urlSyncTimerRef.current) clearTimeout(urlSyncTimerRef.current);
+  };
+ }, [sex, theme, state]);
 
  // If a part was restored from URL/localStorage, open details sheet once atlas loads
  useEffect(()=>{
@@ -212,13 +249,6 @@ export default function Home(){
  },[]);
 
  useEffect(()=>{
-  if(typeof window!=='undefined'){
-   const url=new URL(window.location.href);
-   if(url.searchParams.get('sex')!==sex){
-    url.searchParams.set('sex',sex);
-    window.history.replaceState({},'',url.toString());
-   }
-  }
   setError('');
   const abort=new AbortController();
   const file=sex==='female'?'/models/atlas-female.json':'/models/atlas.json';
@@ -226,12 +256,16 @@ export default function Home(){
    .then(r=>r.json() as Promise<Atlas>)
    .then(a=>{
     setAtlas(a);
-    setState(s=>({
-     ...s,
-     visible:sex==='female'?[...DEFAULT_VISIBLE,'integumentary']:DEFAULT_VISIBLE,
-     selected:[],
-     isolate:false,
-    }));
+    if(isFirstSexLoadRef.current){
+     isFirstSexLoadRef.current=false;
+    }else{
+     setState(s=>({
+      ...s,
+      visible:sex==='female'?[...DEFAULT_VISIBLE,'integumentary']:DEFAULT_VISIBLE,
+      selected:[],
+      isolate:false,
+     }));
+    }
    })
    .catch(e=>{
     if(!abort.signal.aborted)setError('Could not load anatomical definitions for this sex.');
@@ -982,73 +1016,6 @@ export default function Home(){
 
   
 
-  {/* Desktop Horizontal Bottom Scrubber (when exploded) */}
-  {state.explode > 0.05 && !cleanUI && (
-   <div
-    className="desktop-exploded-scrubber desktop-only"
-    role="region"
-    aria-label="Desktop anatomical shelf scrubber"
-   >
-    <button
-     type="button"
-     className="scrubber-step-btn"
-     onClick={() => {
-      const tiers = [0, 0.25, 0.50, 0.75, 1.0];
-      const prev = [...tiers].reverse().find(t => t < state.explode - 0.04) ?? 0;
-      setState(s => ({ ...s, explode: prev, rotate: false }));
-     }}
-     aria-label="Previous anatomical tier"
-     title="Previous tier (Shelf)"
-    >
-     <ChevronLeft size={14} />
-    </button>
-    <div className="scrubber-center">
-     <span className="scrubber-tag">
-      {state.explode >= 0.85 ? 'Shelf 4 · Extremities' :
-       state.explode >= 0.60 ? 'Shelf 3 · Abdomen' :
-       state.explode >= 0.35 ? 'Shelf 2 · Thorax' :
-       state.explode > 0 ? 'Shelf 1 · Cranial' : 'Assembled'}
-     </span>
-     <Slider
-      aria-label="Desktop anatomical shelf navigation"
-      min={0}
-      max={100}
-      step={1}
-      value={[Math.round(state.explode * 100)]}
-      onValueChange={v => {
-       const val = Array.isArray(v) ? v[0] : v;
-       setState(s => ({ ...s, explode: val / 100, rotate: false }));
-      }}
-      className="scrubber-mini-slider"
-     />
-     <span className="scrubber-val">{Math.round(state.explode * 100)}%</span>
-    </div>
-    <button
-     type="button"
-     className="scrubber-step-btn"
-     onClick={() => {
-      const tiers = [0.25, 0.50, 0.75, 1.0];
-      const next = tiers.find(t => t > state.explode + 0.04) ?? 1.0;
-      setState(s => ({ ...s, explode: next, rotate: false }));
-     }}
-     aria-label="Next anatomical tier"
-     title="Next tier (Shelf)"
-    >
-     <ChevronRight size={14} />
-    </button>
-    <button
-     type="button"
-     className="scrubber-reset-btn"
-     onClick={() => {
-      setState(s => ({ ...s, explode: 0, rotate: false }));
-     }}
-     title="Reset explosion to 0%"
-     aria-label="Reset explode"
-    >
-     0%
-    </button>
-   </div>
-  )}
 
   {/* v16 Plain Viewport Scrollers (Adaptive & Minimalist) */}
   <div

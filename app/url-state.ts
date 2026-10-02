@@ -173,6 +173,7 @@ export function serializeStateToUrl(session: SerializedSession): string {
   }
 
   const query = p.toString();
+  if (typeof window === 'undefined') return query ? '?' + query : '';
   return `${window.location.origin}${window.location.pathname}${query ? '?' + query : ''}`;
 }
 
@@ -211,13 +212,15 @@ export function parseStateFromUrl(search: string): Partial<SerializedSession> | 
   const camParam = p.get('cam');
   const tgtParam = p.get('tgt');
   if (camParam) {
-    const coords = camParam.split(',').map(Number);
+    const raw = decodeURIComponent(camParam);
+    const coords = raw.split(',').map(Number);
     if (coords.length === 3 && coords.every(n => !isNaN(n))) {
       state.cameraPos = [coords[0], coords[1], coords[2]];
     }
   }
   if (tgtParam) {
-    const coords = tgtParam.split(',').map(Number);
+    const raw = decodeURIComponent(tgtParam);
+    const coords = raw.split(',').map(Number);
     if (coords.length === 3 && coords.every(n => !isNaN(n))) {
       state.cameraTarget = [coords[0], coords[1], coords[2]];
     }

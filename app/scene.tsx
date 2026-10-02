@@ -20,7 +20,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   triggerRenderRef.current();
  },[state,theme,dockSide,mobileSheetMode]);
  useEffect(()=>{
-  const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView='',lastReset=-1,lastSheetMode=latestSheetMode.current||'closed',lastIsolate='',layoutKey='',amount=latest.current.explode;
+  const el=host.current!;let disposed=false,frame=0,dirty=true,ready=false,lastView=latest.current.view||'three-quarter',lastReset=latest.current.reset??0,lastSheetMode=latestSheetMode.current||'closed',lastIsolate='',layoutKey='',amount=latest.current.explode;
   let lastState:SceneState|null=null,lastThemeKey='';
   triggerRenderRef.current=()=>{dirty=true;};
   const abort=new AbortController();
@@ -30,12 +30,14 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   renderer.setPixelRatio(Math.min(devicePixelRatio,innerWidth<768?1.5:2));renderer.setClearColor(initPalette.bgCanvas);renderer.outputColorSpace=T.SRGBColorSpace;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;el.appendChild(renderer.domElement);
   renderer.domElement.setAttribute('aria-label','Interactive human anatomy. Drag to orbit, pinch or scroll to zoom, and tap a structure to inspect it.');
   const scene=new T.Scene(),camera=new T.PerspectiveCamera(34,1,.005,100),controls=new OrbitControls(camera,renderer.domElement);
+  let hasCustomCamera = Boolean(latest.current.cameraPos && latest.current.cameraTarget);
   if(latest.current.cameraPos && latest.current.cameraTarget){
    camera.position.set(latest.current.cameraPos[0],latest.current.cameraPos[1],latest.current.cameraPos[2]);
    controls.target.set(latest.current.cameraTarget[0],latest.current.cameraTarget[1],latest.current.cameraTarget[2]);
   }else{
    camera.position.set(1.10,0.92,3.18);controls.target.set(0,.86,0);
   }
+  controls.update();
   controls.enableDamping=true;controls.dampingFactor=.085;controls.minDistance=.07;controls.maxDistance=40;controls.maxPolarAngle=Math.PI*.96;
   controls.screenSpacePanning=true;controls.enablePan=true;controls.enableRotate=true;
   controls.mouseButtons={LEFT:T.MOUSE.ROTATE,MIDDLE:T.MOUSE.DOLLY,RIGHT:T.MOUSE.PAN};
@@ -80,13 +82,25 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    }));
   };
   const syncCam=()=>{
+   const pos:[number,number,number]=[
+    parseFloat(camera.position.x.toFixed(2)),
+    parseFloat(camera.position.y.toFixed(2)),
+    parseFloat(camera.position.z.toFixed(2))
+   ];
+   const target:[number,number,number]=[
+    parseFloat(controls.target.x.toFixed(2)),
+    parseFloat(controls.target.y.toFixed(2)),
+    parseFloat(controls.target.z.toFixed(2))
+   ];
    (window as unknown as {__atlas_camera?:{pos:[number,number,number];target:[number,number,number]}}).__atlas_camera={
-    pos:[parseFloat(camera.position.x.toFixed(2)),parseFloat(camera.position.y.toFixed(2)),parseFloat(camera.position.z.toFixed(2))],
-    target:[parseFloat(controls.target.x.toFixed(2)),parseFloat(controls.target.y.toFixed(2)),parseFloat(controls.target.z.toFixed(2))],
+    pos,
+    target,
    };
+   window.dispatchEvent(new CustomEvent('atlas-camera-change',{detail:{pos,target}}));
    calcNavUpdate();
   };
   syncCam();
+  controls.addEventListener('start',()=>{hasCustomCamera=true;});
   controls.addEventListener('change',()=>{dirty=true;syncCam();});
   const pmrem=new T.PMREMGenerator(renderer),room=new RoomEnvironment(),env=pmrem.fromScene(room,.04);scene.environment=env.texture;room.dispose();pmrem.dispose();
   scene.add(new T.HemisphereLight(0xffffff,0xa7acb2,1.05));
@@ -183,6 +197,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   const handleSnap=(e:Event)=>{
    const detail=(e as CustomEvent).detail as {view:'side'|'bottom'|'front'};
    if(!detail?.view)return;
+   hasCustomCamera=true;
    const target=PIVOT.clone();
    controls.target.copy(target);
    const offset=new T.Vector3();
@@ -192,11 +207,13 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    camera.position.copy(target).add(offset);
    controls.update();
    dirty=true;
+   syncCam();
   };
   window.addEventListener('atlas-camera-snap',handleSnap);
   const handlePanX=(e:Event)=>{
    const d=(e as CustomEvent).detail as {val:number};
    if(typeof d?.val!=='number')return;
+   hasCustomCamera=true;
    let minX=Infinity,maxX=-Infinity;let hasVis=false;
    for(let i=0;i<atlas.parts.length;i++){
     if(data[i*4+3]>.5){
@@ -224,6 +241,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   const handlePanY=(e:Event)=>{
    const d=(e as CustomEvent).detail as {val:number};
    if(typeof d?.val!=='number')return;
+   hasCustomCamera=true;
    let minY=Infinity,maxY=-Infinity;let hasVis=false;
    for(let i=0;i<atlas.parts.length;i++){
     if(data[i*4+3]>.5){
@@ -249,6 +267,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
   window.addEventListener('atlas-pan-y',handlePanY);
 
   const handleFitAll=()=>{
+   hasCustomCamera=false;
    fit(latest.current.view,amount);
   };
   window.addEventListener('atlas-fit-all',handleFitAll);
@@ -273,7 +292,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    groups.forEach((gs,system)=>{const geometry=mergeGeometries(gs,false);if(!geometry)throw new Error('Could not assemble anatomy geometry.');geometries.push(geometry);const mesh=new T.Mesh(geometry,isChunkFRC?chunk10Material:mats.get(system as never));mesh.frustumCulled=false;if(system==='integumentary')mesh.renderOrder=100;if(isChunkFRC){tunerGroup.add(mesh);}else{scene.add(mesh);}});
    lastState=null;loaded++;onProgress(Math.round(loaded/atlas.chunks.length*100));dirty=true;
   };
-   (async()=>{try{let cursor=0;await Promise.all(Array.from({length:3},async()=>{while(cursor<atlas.chunks.length){const i=cursor++;await loadChunk(i);}}));if(!disposed){ready=true;dirty=true;if(!latest.current.cameraPos)fit(latest.current.view,amount);}}catch(e){if(!disposed)onError(e instanceof Error?e.message:'Could not load the anatomy.');}})();
+   (async()=>{try{let cursor=0;await Promise.all(Array.from({length:3},async()=>{while(cursor<atlas.chunks.length){const i=cursor++;await loadChunk(i);}}));if(!disposed){ready=true;dirty=true;if(!hasCustomCamera)fit(latest.current.view,amount);}}catch(e){if(!disposed)onError(e instanceof Error?e.message:'Could not load the anatomy.');}})();
    function fit(view:string,expAmount=0){
     const aspect=camera.aspect,mobile=el.clientWidth<768;
 
@@ -351,7 +370,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
     camera.position.copy(controls.target).addScaledVector(direction,distance);
     controls.update();dirty=true;
    };
-  const resize=()=>{layoutKey='';lastState=null;renderer.setPixelRatio(Math.min(devicePixelRatio,el.clientWidth<768||el.clientHeight<600?1.5:2));camera.aspect=el.clientWidth/el.clientHeight;camera.updateProjectionMatrix();renderer.setSize(el.clientWidth,el.clientHeight);fit(latest.current.view,amount);};const observer=new ResizeObserver(resize);observer.observe(el);
+  const resize=()=>{layoutKey='';lastState=null;renderer.setPixelRatio(Math.min(devicePixelRatio,el.clientWidth<768||el.clientHeight<600?1.5:2));camera.aspect=el.clientWidth/el.clientHeight;camera.updateProjectionMatrix();renderer.setSize(el.clientWidth,el.clientHeight);if(!hasCustomCamera)fit(latest.current.view,amount);};const observer=new ResizeObserver(resize);observer.observe(el);
   const raycaster=new T.Raycaster(),pointer=new T.Vector2(),tap=new PointerTap(),worldBox=new T.Box3(),hitPoint=new T.Vector3();
   const planePoint1=new T.Vector3(),planePoint2=new T.Vector3(),panCoord=new T.Vector2();
   const getLibraryPlanePoint=(cx:number,cy:number,out:T.Vector3):boolean=>{
@@ -368,6 +387,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
    return true;
   };
   const panLibraryPlane=(dx:number,dy:number,cx:number,cy:number)=>{
+   hasCustomCamera=true;
    const ok1=getLibraryPlanePoint(cx-dx,cy-dy,planePoint1);
    const ok2=getLibraryPlanePoint(cx,cy,planePoint2);
    if(ok1&&ok2){
@@ -547,7 +567,7 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
     const visible=new Set(s.visible),selection=new Set(s.selected);
     const visibleParts=atlas.parts.filter(p=>s.isolate?selection.has(p.id):visible.has(p.system)||selection.has(p.id));
     const nextLayoutKey=visibleParts.map(p=>p.id).join(',');
-    if(nextLayoutKey!==layoutKey){const layout=createExplosionLayout(visibleParts,1.5);packingWidth=layout.width;packingHeight=layout.height;atlas.parts.forEach((p,i)=>{const cell=layout.cells.get(p.id);offsets[i]=cell?new T.Vector3(cell.x,cell.y+.85,0):centers[i].clone();});layoutKey=nextLayoutKey;if(amount>.05&&!s.isolate)fit(s.view,Math.max(0,(amount-.3)/.7));}
+    if(nextLayoutKey!==layoutKey){const layout=createExplosionLayout(visibleParts,1.5);packingWidth=layout.width;packingHeight=layout.height;atlas.parts.forEach((p,i)=>{const cell=layout.cells.get(p.id);offsets[i]=cell?new T.Vector3(cell.x,cell.y+.85,0):centers[i].clone();});layoutKey=nextLayoutKey;if(amount>.05&&!s.isolate&&!hasCustomCamera)fit(s.view,Math.max(0,(amount-.3)/.7));}
 
     atlas.parts.forEach((p,i)=>{
      const c=centers[i],destination=offsets[i];let dx=0,dy=0,dz=0;
@@ -558,16 +578,17 @@ export default function AnatomyScene({atlas,state,onSelect,onProgress,onError,th
     });partTexture.needsUpdate=true;selectionTexture.needsUpdate=true;markerGeometry.attributes.position.needsUpdate=true;lastState=s;lastExtent=amount;dirty=true;
    }
    const curSheetMode=latestSheetMode.current||'closed';
-   if(s.view!==lastView||s.reset!==lastReset||curSheetMode!==lastSheetMode){fit(s.view,amount);lastView=s.view;lastReset=s.reset;lastSheetMode=curSheetMode;}
-   if(moving&&!s.isolate)fit(s.view,amount);
+   if(s.view!==lastView||s.reset!==lastReset){hasCustomCamera=false;fit(s.view,amount);lastView=s.view;lastReset=s.reset;lastSheetMode=curSheetMode;}
+   else if(curSheetMode!==lastSheetMode){if(!hasCustomCamera)fit(s.view,amount);lastSheetMode=curSheetMode;}
+   if(moving&&!s.isolate&&!hasCustomCamera)fit(s.view,amount);
    const isolateKey=s.isolate?s.selected.join(',')+':'+s.reset+':'+s.inspectorOpen+':'+camera.aspect:'';
    if(isolateKey!==lastIsolate||(s.isolate&&moving)){
     if(s.isolate){const box=new T.Box3();atlas.parts.forEach((p,i)=>{if(s.selected.includes(p.id))box.union(bounds[i].clone().translate(new T.Vector3(data[i*4],data[i*4+1],data[i*4+2])));});
      if(!box.isEmpty()){const center=box.getCenter(new T.Vector3()),size=box.getSize(new T.Vector3());const w=el.clientWidth,h=el.clientHeight,mobile=w<768,landscape=w>h&&h<=600;let left=20,right=w-20,top=mobile?175:110,bottom=h-170;if(s.inspectorOpen){if(landscape){right=w-335;top=100;bottom=h-125;}else if(mobile){const sheet=document.querySelector('.detail-sheet')?.getBoundingClientRect(),header=document.querySelector('.identity')?.getBoundingClientRect();top=(header?.bottom??94)+16;bottom=(sheet?.top??h*.58-139)-16;}else{right=w-370;left=w>1100?285:25;}}const availableWidth=Math.max(150,right-left),availableHeight=Math.max(40,bottom-top);camera.setViewOffset(w,h,w/2-(left+right)/2,h/2-(top+bottom)/2,w,h);const distance=Math.max(.07,Math.max(size.y*h/availableHeight,size.x*w/availableWidth/camera.aspect,size.z)/(2*Math.tan(T.MathUtils.degToRad(camera.fov/2)))*1.35);controls.maxDistance=Math.max(40,distance*2);controls.target.copy(center);camera.position.copy(center).add(new T.Vector3(.2,.1,1).normalize().multiplyScalar(distance));controls.update();dirty=true;}
-    }else if(lastIsolate){camera.clearViewOffset();fit(s.view,amount);}
+    }else if(lastIsolate){camera.clearViewOffset();if(!hasCustomCamera)fit(s.view,amount);}
     lastIsolate=isolateKey;
    }
-   if(amount>.4&&!s.isolate)controls.target.z=0;
+   if(amount>.4&&!s.isolate&&!hasCustomCamera)controls.target.z=0;
    controls.enableRotate=true;controls.enablePan=true;
    const nextPlatform=amount<.5&&!s.isolate;
    if(platform.visible!==nextPlatform){
