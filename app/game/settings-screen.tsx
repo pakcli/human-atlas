@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { GameSettings } from './types';
-import { ChevronLeft, Volume2, VolumeX, Smartphone, Sun, Moon, Type, Eye, Trash2, Check } from 'lucide-react';
+import { ChevronLeft, Volume2, VolumeX, Smartphone, Sun, Moon, Type, Eye, Trash2, Check, RotateCcw } from 'lucide-react';
 
 interface SettingsScreenProps {
   settings: GameSettings;
@@ -182,6 +182,32 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               }`}
             >
               {settings.colorBlindMarkers ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
+          {/* Auto-clear on wrong guess */}
+          <div className="flex items-center justify-between py-2.5">
+            <div className="flex items-center gap-2.5">
+              <RotateCcw size={18} style={{ color: 'var(--accent-primary, #0284c7)' }} />
+              <div>
+                <div className="text-xs font-semibold">
+                  Hapus Otomatis Saat Salah
+                </div>
+                <div className="text-[10px] opacity-60">
+                  Bersihkan kotak jawaban jika salah
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onUpdateSettings({ autoClearOnWrong: settings.autoClearOnWrong === false ? true : false })}
+              className={`px-3 py-1 rounded-xl text-xs font-bold border-b-4 active:translate-y-[2px] active:border-b-2 transition-all ${
+                settings.autoClearOnWrong !== false
+                  ? 'bg-emerald-500 text-white border-emerald-700'
+                  : 'border-slate-300 opacity-60'
+              }`}
+            >
+              {settings.autoClearOnWrong !== false ? 'ON' : 'OFF'}
             </button>
           </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { WordItem, GameSettings } from './types';
 import { soundManager } from './sound-manager';
-import { Pause, Shuffle, Delete, ArrowRight, Box } from 'lucide-react';
+import { Pause, Shuffle, Delete, ArrowRight, Box, RotateCcw } from 'lucide-react';
 
 interface WordConnectGameProps {
   word: WordItem;
@@ -96,32 +96,71 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
     return nodes;
   }, [wordLength, shuffledChars]);
 
+  const isCheckingRef = useRef(false);
+
+  // Validate the guess immediately when filled
+  const checkGuessAndValidate = (indices: number[]) => {
+    if (isCheckingRef.current || indices.length !== wordLength) return;
+    isCheckingRef.current = true;
+
+    const currentWord = indices.map((i) => shuffledChars[i]).join('');
+    if (currentWord === targetWord) {
+      soundManager.playWin(settings.sound);
+      soundManager.vibrate(settings.vibration, [40, 60, 80]);
+      onSuccess();
+      isCheckingRef.current = false;
+    } else {
+      soundManager.playWrong(settings.sound);
+      soundManager.vibrate(settings.vibration, [80, 50, 80]);
+      setIsShaking(true);
+      setTimeout(() => {
+        setIsShaking(false);
+        isCheckingRef.current = false;
+        // Default setting: clear if wrong, unless disabled by user in Settings
+        if (settings.autoClearOnWrong !== false) {
+          setSelectedIndices([]);
+        }
+      }, 600);
+    }
+  };
+
   // Handle tap letter
   const handleNodeClick = (index: number) => {
+    if (isCheckingRef.current || isShaking) return;
     soundManager.playTap(settings.sound);
     soundManager.vibrate(settings.vibration, 20);
 
     const existsPos = selectedIndices.indexOf(index);
     if (existsPos === selectedIndices.length - 1) {
       setSelectedIndices(selectedIndices.slice(0, -1));
-    } else if (existsPos === -1) {
-      setSelectedIndices([...selectedIndices, index]);
+    } else if (existsPos === -1 && selectedIndices.length < wordLength) {
+      const next = [...selectedIndices, index];
+      setSelectedIndices(next);
+      if (next.length === wordLength) {
+        checkGuessAndValidate(next);
+      }
     }
   };
 
   // Dragging support (Pointer Events for Touch & Mouse)
   const handlePointerDown = (index: number, e: React.PointerEvent) => {
+    if (isCheckingRef.current || isShaking) return;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     setIsDragging(true);
-    if (!selectedIndices.includes(index)) {
+    if (!selectedIndices.includes(index) && selectedIndices.length < wordLength) {
       soundManager.playTap(settings.sound);
       soundManager.vibrate(settings.vibration, 20);
-      setSelectedIndices([...selectedIndices, index]);
+      const next = [...selectedIndices, index];
+      setSelectedIndices(next);
+      if (next.length === wordLength) {
+        setIsDragging(false);
+        checkGuessAndValidate(next);
+      }
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
-    if (!isDragging || !containerRef.current) return;
+    if (!isDragging || !containerRef.current || isCheckingRef.current || isShaking) return;
     const rect = containerRef.current.getBoundingClientRect();
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
@@ -129,10 +168,16 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
 
     platterNodes.forEach((node, idx) => {
       const dist = Math.hypot(px - node.x, py - node.y);
-      if (dist < 32 && !selectedIndices.includes(idx)) {
+      if (dist < 32 && !selectedIndices.includes(idx) && selectedIndices.length < wordLength) {
         soundManager.playTap(settings.sound);
         soundManager.vibrate(settings.vibration, 15);
-        setSelectedIndices((prev) => [...prev, idx]);
+        const next = [...selectedIndices, idx];
+        setSelectedIndices(next);
+        if (next.length === wordLength) {
+          setIsDragging(false);
+          setPointerPos(null);
+          checkGuessAndValidate(next);
+        }
       }
     });
   };
@@ -143,6 +188,7 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
   };
 
   const handleShuffle = () => {
+    if (isCheckingRef.current || isShaking) return;
     soundManager.playTap(settings.sound);
     soundManager.vibrate(settings.vibration, 15);
     const arr = [...shuffledChars];
@@ -154,7 +200,14 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
     setSelectedIndices([]);
   };
 
+  const handleClear = () => {
+    if (isCheckingRef.current || isShaking) return;
+    soundManager.playTap(settings.sound);
+    setSelectedIndices([]);
+  };
+
   const handleBackspace = () => {
+    if (isCheckingRef.current || isShaking) return;
     soundManager.playTap(settings.sound);
     if (selectedIndices.length > 0) {
       setSelectedIndices(selectedIndices.slice(0, -1));
@@ -162,20 +215,7 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
   };
 
   const handleSubmit = () => {
-    const currentWord = selectedIndices.map((i) => shuffledChars[i]).join('');
-    if (currentWord === targetWord) {
-      soundManager.playWin(settings.sound);
-      soundManager.vibrate(settings.vibration, [40, 60, 80]);
-      onSuccess();
-    } else {
-      soundManager.playWrong(settings.sound);
-      soundManager.vibrate(settings.vibration, [80, 50, 80]);
-      setIsShaking(true);
-      setTimeout(() => {
-        setIsShaking(false);
-        setSelectedIndices([]);
-      }, 700);
-    }
+    checkGuessAndValidate(selectedIndices);
   };
 
   const formedWord = selectedIndices.map((i) => shuffledChars[i]).join('');
@@ -234,10 +274,10 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
         </button>
       </div>
 
-      {/* Clue and Question Text */}
-      <div className="px-4 py-3 text-center">
+      {/* Sub-header Bar: Clue badge on left, Acak button on top right below navbar */}
+      <div className="flex items-center justify-between px-4 pt-2 pb-0.5">
         <div
-          className="inline-block px-3 py-1 mb-2 rounded-full text-xs font-semibold"
+          className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold"
           style={{
             backgroundColor: 'var(--panel-bg, #f1f5f9)',
             color: 'var(--accent-primary, #0284c7)',
@@ -245,6 +285,21 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
         >
           💡 Petunjuk ({word.category})
         </div>
+
+        {/* Acak Button: placed at top right below the navbar */}
+        <button
+          type="button"
+          onClick={handleShuffle}
+          className="tebak-key-tile tile-default py-1 px-3 text-xs flex items-center gap-1.5"
+          title="Acak posisi huruf"
+        >
+          <Shuffle size={14} />
+          <span>Acak</span>
+        </button>
+      </div>
+
+      {/* Clue and Question Text */}
+      <div className="px-4 py-1 text-center">
         <p className="text-sm font-semibold leading-snug opacity-95">
           {word.clue}
         </p>
@@ -347,22 +402,25 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
         </div>
       </div>
 
-      {/* Control Buttons (Section 10.7: Acak, Hapus, Kirim) with Fake 3D Tiles */}
+      {/* Control Buttons (Clear, Hapus, Kirim) with Tactile Fake 3D Tiles */}
       <div className="flex gap-2.5 px-4 pt-2 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <button
           type="button"
-          onClick={handleShuffle}
-          className="tebak-key-tile tile-default flex-1 py-3 px-3 text-xs flex items-center justify-center gap-1.5"
+          onClick={handleClear}
+          disabled={selectedIndices.length === 0}
+          className="tebak-key-tile tile-default flex-1 py-2.5 sm:py-3 px-3 text-xs flex items-center justify-center gap-1.5 disabled:opacity-40"
+          title="Bersihkan semua huruf"
         >
-          <Shuffle size={16} />
-          <span>Acak</span>
+          <RotateCcw size={15} />
+          <span>Clear</span>
         </button>
 
         <button
           type="button"
           onClick={handleBackspace}
           disabled={selectedIndices.length === 0}
-          className="tebak-key-tile tile-action-delete flex-1 py-3 px-3 text-xs flex items-center justify-center gap-1.5 disabled:opacity-40"
+          className="tebak-key-tile tile-action-delete flex-1 py-2.5 sm:py-3 px-3 text-xs flex items-center justify-center gap-1.5 disabled:opacity-40"
+          title="Hapus satu huruf terakhir"
         >
           <Delete size={16} />
           <span>Hapus</span>
@@ -372,7 +430,8 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
           type="button"
           onClick={handleSubmit}
           disabled={selectedIndices.length !== wordLength}
-          className="tebak-key-tile tile-action-enter flex-2 py-3 px-4 text-sm flex items-center justify-center gap-2 disabled:opacity-40"
+          className="tebak-key-tile tile-action-enter flex-[1.4] py-2.5 sm:py-3 px-4 text-sm flex items-center justify-center gap-2 disabled:opacity-40"
+          title="Kirim jawaban"
         >
           <span>Kirim</span>
           <ArrowRight size={16} />

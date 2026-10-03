@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS: GameSettings = {
   largeText: false,
   colorBlindMarkers: true,
   readAloud: false,
+  autoClearOnWrong: true,
 };
 
 export const GameApp: React.FC<GameAppProps> = ({

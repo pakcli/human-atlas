@@ -1129,6 +1129,7 @@ Named enzymes (AMILASE, LIPASE) are **not** in SD. ENZIM and LIUR set the "SD up
 | 32 | Livestream chiclet fake 3D style | Replaced bulky cartoon pill radius with sleek rectangular chiclet keys (`border-radius: 5px`, 3.5px solid bottom bevel, chamfer top highlight, vibrant green/yellow/muted surfaces) matching the livestream Wordle reference |
 | 33 | Complete theme engine binding | Eliminated all hardcoded brown tones; 100% reactive color-mix on active theme variables (`--panel-bg-solid`, `--panel-border`, `--accent-primary`) |
 | 34 | Zero vertical scroll guarantee | Compact 3-row keyboard layout with integrated Backspace/Enter, tightened padding and mascot height to ensure 100% viewport fit on both mobile (375x667) and desktop without scrollbars |
+| 35 | Tebak Sambung controls & validation | Relocated Shuffle ("Acak") button to top right below navbar, added dedicated "Clear" (reset all) alongside "Hapus" (backspace), implemented immediate validation on filled word slots, and added toggleable "Hapus Otomatis Saat Salah" setting (`autoClearOnWrong`) |
 
 
 ### 17.2 Open questions

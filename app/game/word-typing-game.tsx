@@ -79,11 +79,12 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
       soundManager.vibrate(settings.vibration, [50, 70, 100]);
       const finalScore = computeFinalScore(guesses.length, revealedIndices.length);
       onSuccess(finalScore, guesses.length);
-    } else {
       // Wrong guess
       soundManager.playWrong(settings.sound);
       soundManager.vibrate(settings.vibration, 30);
-      setCurrentGuess('');
+      if (settings.autoClearOnWrong !== false) {
+        setCurrentGuess('');
+      }
     }
   };
 

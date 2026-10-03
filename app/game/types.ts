@@ -29,6 +29,7 @@ export interface GameSettings {
   largeText: boolean;
   colorBlindMarkers: boolean;
   readAloud: boolean;
+  autoClearOnWrong: boolean;
 }
 
 export interface GameStats {
