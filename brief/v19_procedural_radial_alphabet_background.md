@@ -178,3 +178,18 @@ interface RadialAlphabetBackgroundProps {
    - Mount background inside `app/game/game-app.tsx` so all screens (`menu`, `connect`, `typing`, `settings`) benefit from the ambient atmosphere.
 4. **Phase 4: Multi-Theme & Dark Mode Verification**:
    - Test across all 6 color palettes in both Light and Dark mode to ensure zero contrast degradation with gameplay tiles.
+
+---
+
+## 8. Revision r2: Anti-Clockface Organic Scatter
+
+**Problem:** the concentric-ring layout (Section 3) read as a clock face: evenly spaced letters on visible circles, too repetitive.
+
+**Fix (implemented in `radial-alphabet-generator.ts`):**
+- **No rings.** Glyphs are placed by seeded dart-throwing at random angle/radius, rejecting candidates that overlap (spacing scales with glyph size).
+- **Random empty gaps.** ~9 random circular voids (70-220 units) are carved out, plus random skipping (denser skipping near the center), so the field has uneven breathing room.
+- **Size gradient kept.** 14 -> ~70 units from center to edge, each with +/-25% size jitter.
+- **Stronger rotation jitter** (+/-35 degrees) to break alignment.
+- **Letter bag.** Letters are drawn from a shuffled A-Z bag, and a letter is not reused within ~260 units of itself, so A-Z cycles without visible repetition.
+- **Center stays calm.** A 120-unit radius is kept free for the gameplay platter.
+

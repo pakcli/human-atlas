@@ -4,7 +4,6 @@ export interface RadialGlyph {
   y: number;
   size: number;
   rotation: number;
-  ring: number;
 }
 
 /** Deterministic PRNG (mulberry32). */
@@ -32,69 +31,91 @@ function shuffle<T>(arr: T[], rand: () => number): T[] {
 
 export interface RadialOptions {
   seed?: number;
-  /** Virtual canvas size (viewBox is size x size, centered at 0,0). */
+  /** Virtual canvas size (viewBox is extent x extent, centered at 0,0). */
   extent?: number;
-  rings?: number;
+  /** Radius kept free in the middle for gameplay. */
   minRadius?: number;
   minSize?: number;
   maxSize?: number;
   /** Radial exponent: >1 pushes growth toward the edge. */
   sizeExponent?: number;
-  ringExponent?: number;
-  /** Target arc spacing between glyphs, as a multiple of glyph size. */
-  spacing?: number;
+  /** Target number of glyphs before gaps/collisions thin it out. */
+  attempts?: number;
+  /** Number of random empty "voids" carved out of the field. */
+  voids?: number;
 }
 
 /**
- * Concentric rings of non-repeating letters (A–Z, no duplicates inside a ring).
+ * Organic scatter (no rings): dart-throwing with size-aware spacing, random
+ * empty voids and a letter bag so the same letter never sits near itself.
  * Glyph size grows from center (small) to periphery (large).
  */
 export function generateRadialGlyphs(opts: RadialOptions = {}): RadialGlyph[] {
   const {
     seed = 20260503,
     extent = 1000,
-    rings = 5,
-    minRadius = 110,
+    minRadius = 120,
     minSize = 14,
-    maxSize = 64,
-    sizeExponent = 1.3,
-    ringExponent = 1.15,
-    spacing = 2.6,
+    maxSize = 70,
+    sizeExponent = 1.4,
+    attempts = 2600,
+    voids = 9,
   } = opts;
 
   const rand = mulberry32(seed);
   const maxRadius = (Math.SQRT2 * extent) / 2;
+
+  // Random empty gaps (soft blobs) so the pattern has breathing room.
+  const holes = Array.from({ length: voids }, () => {
+    const ang = rand() * Math.PI * 2;
+    const rr = minRadius + rand() * (maxRadius - minRadius);
+    return {
+      x: Math.cos(ang) * rr,
+      y: Math.sin(ang) * rr,
+      r: 70 + rand() * 150,
+    };
+  });
+
   const out: RadialGlyph[] = [];
-  let prevLast = '';
-
-  for (let k = 1; k <= rings; k++) {
-    const t = k / rings;
-    const r = minRadius + (maxRadius - minRadius) * Math.pow(t, ringExponent);
-    const rel = (r - minRadius) / (maxRadius - minRadius);
-    const size = minSize + (maxSize - minSize) * Math.pow(rel, sizeExponent);
-
-    const count = Math.max(5, Math.min(26, Math.floor((2 * Math.PI * r) / (size * spacing))));
-    let letters = shuffle(ALPHABET, rand);
-    // avoid same letter at the ring seam with previous ring
-    if (letters[0] === prevLast) letters = letters.slice(1).concat(letters[0]);
-    letters = letters.slice(0, count);
-    prevLast = letters[letters.length - 1];
-
-    const phase = rand() * Math.PI * 2;
-    for (let i = 0; i < count; i++) {
-      const jitterA = (rand() - 0.5) * (Math.PI / count) * 0.6;
-      const jitterR = (rand() - 0.5) * size * 0.8;
-      const ang = phase + (i / count) * Math.PI * 2 + jitterA;
-      const rr = r + jitterR;
-      out.push({
-        char: letters[i],
-        x: Math.cos(ang) * rr,
-        y: Math.sin(ang) * rr,
-        size,
-        rotation: (rand() - 0.5) * 36,
-        ring: k,
-      });
+  let bag: string[] = [];
+  const nextFromBag = (x: number, y: number): string => {
+    for (let tries = 0; tries < 30; tries++) {
+      if (bag.length === 0) bag = shuffle(ALPHABET, rand);
+      const c = bag.shift()!;
+      const clash = out.some(
+        (g) => g.char === c && Math.hypot(g.x - x, g.y - y) < 260
+      );
+      if (!clash) return c;
+      bag.push(c);
     }
+    return ALPHABET[Math.floor(rand() * 26)];
+  };
+
+  for (let i = 0; i < attempts; i++) {
+    const ang = rand() * Math.PI * 2;
+    // sqrt-ish radial sampling keeps density roughly even per area
+    const rr = minRadius + (maxRadius - minRadius) * Math.sqrt(rand());
+    const x = Math.cos(ang) * rr;
+    const y = Math.sin(ang) * rr;
+
+    const rel = (rr - minRadius) / (maxRadius - minRadius);
+    const size = minSize + (maxSize - minSize) * Math.pow(rel, sizeExponent) * (0.75 + rand() * 0.5);
+
+    if (holes.some((h) => Math.hypot(x - h.x, y - h.y) < h.r)) continue;
+    // extra random skipping, stronger near the center => sparser core
+    if (rand() < 0.35 - rel * 0.2) continue;
+
+    const gap = size * 2.4;
+    const blocked = out.some((g) => Math.hypot(g.x - x, g.y - y) < (g.size + size) * 1.35 + gap * 0.35);
+    if (blocked) continue;
+
+    out.push({
+      char: nextFromBag(x, y),
+      x,
+      y,
+      size,
+      rotation: (rand() - 0.5) * 70,
+    });
   }
   return out;
 }
