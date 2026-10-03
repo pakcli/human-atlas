@@ -79,12 +79,22 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
       soundManager.vibrate(settings.vibration, [50, 70, 100]);
       const finalScore = computeFinalScore(guesses.length, revealedIndices.length);
       onSuccess(finalScore, guesses.length);
+    } else {
       // Wrong guess
       soundManager.playWrong(settings.sound);
       soundManager.vibrate(settings.vibration, 30);
       if (settings.autoClearOnWrong !== false) {
         setCurrentGuess('');
       }
+    }
+  };
+
+  // Remove specific letter from guessing word draft when user presses on its slot
+  const handleRemoveDraftChar = (colIdx: number) => {
+    if (colIdx < currentGuess.length) {
+      soundManager.playTap(settings.sound);
+      soundManager.vibrate(settings.vibration, 15);
+      setCurrentGuess((prev) => prev.slice(0, colIdx) + prev.slice(colIdx + 1));
     }
   };
 
@@ -130,7 +140,7 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
     <div
       className="flex flex-col h-full max-w-md mx-auto w-full select-none overflow-hidden justify-between"
       style={{
-        backgroundColor: 'var(--bg-canvas, #faf7f2)',
+        backgroundColor: 'transparent',
         color: 'var(--panel-text, #0f172a)',
       }}
     >
@@ -262,22 +272,27 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
           </div>
         ))}
 
-        {/* Current Active Input Row */}
+        {/* Current Active Input Row (Tapping a letter removes it from the draft) */}
         <div className={`flex gap-1.5 ${isShakeActive ? 'animate-shake' : ''}`}>
           {Array.from({ length: wordLength }).map((_, colIdx) => {
             const char = currentGuess[colIdx] || '';
             const isRevealedHint = revealedIndices.includes(colIdx) && !char;
             return (
-              <div
+              <button
                 key={colIdx}
+                type="button"
+                onClick={() => handleRemoveDraftChar(colIdx)}
+                title={char ? `Hapus huruf ${char}` : undefined}
                 className={`tebak-slot-tile w-10 h-10 sm:w-11 sm:h-11 ${
-                  char ? 'slot-active' : 'slot-empty'
+                  char
+                    ? 'slot-active cursor-pointer active:scale-90 hover:brightness-110'
+                    : 'slot-empty'
                 } ${isRevealedHint ? 'border-dashed' : ''} ${
                   settings.largeText ? 'text-xl' : 'text-lg'
                 }`}
               >
                 {char || (isRevealedHint ? targetWord[colIdx] : '')}
-              </div>
+              </button>
             );
           })}
         </div>

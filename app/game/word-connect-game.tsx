@@ -214,6 +214,17 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
     }
   };
 
+  const handleRemoveSlotChar = (slotIdx: number) => {
+    if (isCheckingRef.current || isShaking) return;
+    if (slotIdx < selectedIndices.length) {
+      soundManager.playTap(settings.sound);
+      soundManager.vibrate(settings.vibration, 15);
+      const next = [...selectedIndices];
+      next.splice(slotIdx, 1);
+      setSelectedIndices(next);
+    }
+  };
+
   const handleSubmit = () => {
     checkGuessAndValidate(selectedIndices);
   };
@@ -225,7 +236,7 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
       className="flex flex-col h-full max-w-md mx-auto w-full select-none overflow-hidden justify-between"
       onPointerUp={handlePointerUp}
       style={{
-        backgroundColor: 'var(--bg-canvas, #faf7f2)',
+        backgroundColor: 'transparent',
         color: 'var(--panel-text, #0f172a)',
       }}
     >
@@ -319,19 +330,24 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
         )}
       </div>
 
-      {/* Answer Boxes with gentle shake on wrong */}
+      {/* Answer Boxes (Tapping a letter removes it from draft) */}
       <div className={`flex justify-center gap-1.5 px-4 my-2 ${isShaking ? 'animate-shake' : ''}`}>
         {Array.from({ length: wordLength }).map((_, i) => {
           const char = formedWord[i] || '';
           return (
-            <div
+            <button
               key={i}
+              type="button"
+              onClick={() => handleRemoveSlotChar(i)}
+              title={char ? `Hapus huruf ${char}` : undefined}
               className={`tebak-slot-tile w-10 h-12 ${
-                char ? 'slot-active' : 'slot-empty'
+                char
+                  ? 'slot-active cursor-pointer active:scale-90 hover:brightness-110'
+                  : 'slot-empty'
               } ${settings.largeText ? 'text-2xl' : 'text-xl'}`}
             >
               {char || '·'}
-            </div>
+            </button>
           );
         })}
       </div>
@@ -343,8 +359,8 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
           className="relative w-[260px] h-[260px] touch-none"
           onPointerMove={handlePointerMove}
         >
-          {/* SVG connecting lines between selected nodes */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
+          {/* SVG connecting lines between selected nodes (strictly behind letter tiles) */}
+          <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
             {selectedIndices.length > 1 && (
               <polyline
                 points={selectedIndices
@@ -352,12 +368,47 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
                   .join(' ')}
                 fill="none"
                 stroke="var(--accent-primary, #0284c7)"
-                strokeWidth="8"
+                strokeWidth="12"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                strokeOpacity="0.85"
+                strokeOpacity="0.95"
               />
             )}
+
+            {/* Directional Arrowheads (-->) between consecutive connected nodes */}
+            {selectedIndices.length > 1 &&
+              selectedIndices.slice(0, -1).map((fromIdx, i) => {
+                const toIdx = selectedIndices[i + 1];
+                const p1 = platterNodes[fromIdx];
+                const p2 = platterNodes[toIdx];
+                if (!p1 || !p2) return null;
+
+                const midX = (p1.x + p2.x) / 2;
+                const midY = (p1.y + p2.y) / 2;
+                const angle = (Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180) / Math.PI;
+
+                return (
+                  <g key={`arrow-${i}`} transform={`translate(${midX}, ${midY}) rotate(${angle})`}>
+                    <polygon
+                      points="-11,-8 8,0 -11,8 -5,0"
+                      fill="var(--accent-primary, #0284c7)"
+                      stroke="white"
+                      strokeWidth="2.5"
+                      strokeLinejoin="round"
+                    />
+                    <polyline
+                      points="-5,-4 1,0 -5,4"
+                      fill="none"
+                      stroke="white"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </g>
+                );
+              })}
+
+            {/* Active Dragging Line */}
             {isDragging && pointerPos && selectedIndices.length > 0 && (
               <line
                 x1={platterNodes[selectedIndices[selectedIndices.length - 1]].x}
@@ -365,14 +416,44 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
                 x2={pointerPos.x}
                 y2={pointerPos.y}
                 stroke="var(--accent-primary, #0284c7)"
-                strokeWidth="6"
+                strokeWidth="9"
                 strokeLinecap="round"
-                strokeDasharray="4 4"
+                strokeDasharray="5 5"
               />
             )}
+
+            {/* Active Dragging Arrowhead (-->) at pointer position */}
+            {isDragging && pointerPos && selectedIndices.length > 0 && (() => {
+              const lastNode = platterNodes[selectedIndices[selectedIndices.length - 1]];
+              if (!lastNode) return null;
+              const dx = pointerPos.x - lastNode.x;
+              const dy = pointerPos.y - lastNode.y;
+              if (Math.hypot(dx, dy) < 18) return null;
+              const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+
+              return (
+                <g transform={`translate(${pointerPos.x}, ${pointerPos.y}) rotate(${angle})`}>
+                  <polygon
+                    points="-12,-9 8,0 -12,9 -6,0"
+                    fill="var(--accent-primary, #0284c7)"
+                    stroke="white"
+                    strokeWidth="2.5"
+                    strokeLinejoin="round"
+                  />
+                  <polyline
+                    points="-5,-4 1,0 -5,4"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </g>
+              );
+            })()}
           </svg>
 
-          {/* Letter Nodes with Tactile Fake 3D Tiles */}
+          {/* Letter Nodes with Tactile Fake 3D Tiles (in front of connecting lines) */}
           {platterNodes.map((node, idx) => {
             const isSelected = selectedIndices.includes(idx);
             const orderIndex = selectedIndices.indexOf(idx);
@@ -386,8 +467,8 @@ export const WordConnectGame: React.FC<WordConnectGameProps> = ({
                   left: `${node.x - 28}px`,
                   top: `${node.y - 28}px`,
                 }}
-                className={`tebak-node-tile w-14 h-14 ${
-                  isSelected ? 'node-selected' : 'node-default'
+                className={`tebak-node-tile w-14 h-14 z-10 ${
+                  isSelected ? 'node-selected z-20' : 'node-default'
                 } ${settings.largeText ? 'text-2xl' : 'text-xl'}`}
               >
                 {node.char}

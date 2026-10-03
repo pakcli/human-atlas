@@ -1617,7 +1617,9 @@ export default function Home(){
    >
     <GameApp
      currentTheme={theme}
+     accentTheme={state.accentTheme ?? 'navy_blue'}
      onToggleTheme={toggleTheme}
+     onSelectAccentTheme={(themeId) => setState(s => ({ ...s, accentTheme: themeId }))}
      onOpenAtlas={handleOpenAtlasFromGame}
      onCloseGame={()=>setViewMode('atlas')}
     />

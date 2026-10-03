@@ -9,10 +9,14 @@ import { PauseModal } from './pause-modal';
 import { ExitModal } from './exit-modal';
 import { AboutScreen } from './about-screen';
 import { SettingsScreen } from './settings-screen';
+import { RadialAlphabetBackground } from './radial-alphabet-background';
+import type { AccentThemeId } from '../theme-engine';
 
 interface GameAppProps {
   currentTheme: 'light' | 'dark';
+  accentTheme?: AccentThemeId;
   onToggleTheme: () => void;
+  onSelectAccentTheme?: (id: AccentThemeId) => void;
   onOpenAtlas: (targetName?: string) => void;
   onCloseGame: () => void;
 }
@@ -29,7 +33,9 @@ const DEFAULT_SETTINGS: GameSettings = {
 
 export const GameApp: React.FC<GameAppProps> = ({
   currentTheme,
+  accentTheme = 'navy_blue',
   onToggleTheme,
+  onSelectAccentTheme,
   onOpenAtlas,
   onCloseGame,
 }) => {
@@ -132,7 +138,7 @@ export const GameApp: React.FC<GameAppProps> = ({
   return (
     <div
       data-theme={currentTheme}
-      className={`relative w-full h-full flex flex-col overflow-hidden font-sans select-none ${
+      className={`relative isolate w-full h-full flex flex-col overflow-hidden font-sans select-none ${
         currentTheme === 'dark' ? 'dark' : ''
       }`}
       style={{
@@ -140,6 +146,8 @@ export const GameApp: React.FC<GameAppProps> = ({
         color: 'var(--panel-text, #0f172a)',
       }}
     >
+      <RadialAlphabetBackground theme={currentTheme} />
+
       {/* Active Screen View */}
       {screen === 'menu' && (
         <MenuScreen
@@ -178,6 +186,8 @@ export const GameApp: React.FC<GameAppProps> = ({
       {screen === 'settings' && (
         <SettingsScreen
           settings={settings}
+          accentTheme={accentTheme}
+          onSelectAccentTheme={onSelectAccentTheme}
           onUpdateSettings={handleUpdateSettings}
           onClearGameData={handleClearGameData}
           onBack={() => setScreen('menu')}

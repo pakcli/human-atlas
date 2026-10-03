@@ -1130,6 +1130,9 @@ Named enzymes (AMILASE, LIPASE) are **not** in SD. ENZIM and LIUR set the "SD up
 | 33 | Complete theme engine binding | Eliminated all hardcoded brown tones; 100% reactive color-mix on active theme variables (`--panel-bg-solid`, `--panel-border`, `--accent-primary`) |
 | 34 | Zero vertical scroll guarantee | Compact 3-row keyboard layout with integrated Backspace/Enter, tightened padding and mascot height to ensure 100% viewport fit on both mobile (375x667) and desktop without scrollbars |
 | 35 | Tebak Sambung controls & validation | Relocated Shuffle ("Acak") button to top right below navbar, added dedicated "Clear" (reset all) alongside "Hapus" (backspace), implemented immediate validation on filled word slots, and added toggleable "Hapus Otomatis Saat Salah" setting (`autoClearOnWrong`) |
+| 36 | Connector line layering | Platter SVG connecting lines set to `z-0` and node letter tiles elevated to `z-10` (`z-20` when selected) so connector lines run strictly behind tile surfaces and never obscure letters or badges |
+| 37 | Wrong letter hazard stripes & direct draft removal | Added subtle "garis polisi" (diagonal hazard `//` stripes) with grayout to `tile-wrong` surfaces on keyboard and guess grid; enabled tapping directly on any filled letter slot in the guessing word draft to immediately remove that specific letter |
+| 38 | Directional arrowheads (`-->`) | Added sleek SVG directional arrowheads along connecting lines between connected nodes (positioned cleanly at midpoint) and at the drag pointer tip pointing towards swipe direction |
 
 
 ### 17.2 Open questions

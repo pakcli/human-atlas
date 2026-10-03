@@ -24,7 +24,7 @@ export const MenuScreen: React.FC<MenuScreenProps> = ({
     <div
       className="flex flex-col h-full max-w-md mx-auto w-full select-none overflow-hidden px-4 py-2.5 justify-between"
       style={{
-        backgroundColor: 'var(--bg-canvas, #faf7f2)',
+        backgroundColor: 'transparent',
         color: 'var(--panel-text, #0f172a)',
       }}
     >
