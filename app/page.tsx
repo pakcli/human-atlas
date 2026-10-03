@@ -1,7 +1,8 @@
 import {flushSync} from 'react-dom';
 import {registerAtlasTools} from './agent-tools';
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {Activity,ArrowRightLeft,ArrowUpRight,Check,ChevronDown,ChevronLeft,ChevronRight,ChevronUp,CircleDot,Eye,EyeOff,Focus,Info,Layers3,Maximize,Minimize,Moon,Pause,RotateCcw,RotateCw,Search,Share2,Sun,X} from 'lucide-react';
+import {Activity,ArrowRightLeft,ArrowUpRight,Check,ChevronDown,ChevronLeft,ChevronRight,ChevronUp,CircleDot,Eye,EyeOff,Focus,Gamepad2,Info,Layers3,Maximize,Minimize,Moon,Pause,RotateCcw,RotateCw,Search,Share2,Sun,X} from 'lucide-react';
+import { GameApp } from './game/game-app';
 import {Button} from '@/components/ui/button';
 import {Badge} from '@/components/ui/badge';
 import {Slider} from '@/components/ui/slider';
@@ -140,6 +141,8 @@ export default function Home(){
  const [dockSide,setDockSide]=useState<'right'|'left'>('right');
  const [cleanUI,setCleanUI]=useState(false);
  const [isFullscreen,setIsFullscreen]=useState(false);
+ const [viewMode,setViewMode]=useState<'atlas'|'game'>('atlas');
+ const [gameTargetName,setGameTargetName]=useState<string|null>(null);
 
  useEffect(()=>{
   const handleFs=()=>setIsFullscreen(Boolean(document.fullscreenElement));
@@ -343,6 +346,18 @@ export default function Home(){
   setState(s=>({...s,selected:[],isolate:false,visible:s.visible.includes(id)?s.visible.filter(x=>x!==id):[...s.visible,id]}));
  };
 
+ const handleOpenAtlasFromGame=(targetName?:string)=>{
+  setViewMode('atlas');
+  if(targetName&&atlas){
+   setGameTargetName(targetName);
+   const targetLower=targetName.toLowerCase().trim();
+   const found=atlas.concepts.find(c=>c.name.toLowerCase().includes(targetLower))||atlas.concepts.find(c=>targetLower.includes(c.name.toLowerCase()));
+   if(found){
+    choose(found);
+   }
+  }
+ };
+
  const reset=()=>{
   setState(s=>({
    ...defaultState,
@@ -390,7 +405,7 @@ export default function Home(){
   });
  };
 
- return <main className={`studio ${cleanUI?'clean-ui-mode':''}`} data-mobile-sheet={mobileSheetMode} data-clean-ui={cleanUI}>
+ return <main className={`studio ${cleanUI?'clean-ui-mode':''}`} data-mobile-sheet={mobileSheetMode} data-clean-ui={cleanUI} data-view-mode={viewMode}>
   {atlas&&<AnatomyScene atlas={atlas} state={{...state,inspectorOpen:details&&selectedParts.length>0}} theme={theme} dockSide={dockSide} mobileSheetMode={mobileSheetMode} onSelect={choosePart} onProgress={n=>{setProgress(n);if(n===100)setError('');}} onError={setError}/>}
   <ModelTuner
    sex={sex}
@@ -605,6 +620,19 @@ export default function Home(){
    >
     {isFullscreen?<Minimize size={18}/>:<Maximize size={18}/>}
    </Button>
+   <Button
+    variant="ghost"
+    className="game-launch-button"
+    onClick={()=>{
+     setPanel(null);
+     setDetails(false);
+     setViewMode('game');
+    }}
+    aria-label="Tebak Tebak Kata"
+    title="Mainkan Tebak Tebak Kata (Game Edukasi)"
+   >
+    <Gamepad2 size={18}/><span>Tebak Kata</span>
+   </Button>
    <Button variant="ghost" className={panel==='search'?'active':''} onClick={()=>openPanel('search')} aria-label="Search anatomy">
     <Search size={18}/><span>Find a structure</span><kbd>/</kbd>
    </Button>
@@ -622,6 +650,21 @@ export default function Home(){
    </Button>
   </nav>
   {toastMsg&&<div className="share-toast" role="status">{toastMsg}</div>}
+
+  {/* Floating Return to Game Banner (Section 9 & 10.8) */}
+  {viewMode==='atlas'&&gameTargetName&&(
+   <div
+    className="fixed top-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 py-2 px-4 rounded-full bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-xl border border-white/20 active:translate-y-[1px] cursor-pointer transition-all animate-fadeIn"
+    onClick={()=>setViewMode('game')}
+    role="button"
+    tabIndex={0}
+    title="Kembali ke Tebak Tebak Kata"
+   >
+    <ChevronLeft size={16}/>
+    <span>&lt;&lt; Kembali ke Game</span>
+    <span className="px-2 py-0.5 rounded-full bg-amber-800/80 text-[10px]">Target: {gameTargetName}</span>
+   </div>
+  )}
 
   {/* Systems panel (Left) */}
   <section className={`layers-panel glass ${panel==='layers'?'mobile-open':''}`} aria-label="Anatomical layers">
@@ -1440,7 +1483,7 @@ export default function Home(){
   </section>
 
   {/* Standardized Information Panel */}
-  <Sheet open={details&&selectedParts.length>0} modal={false} disablePointerDismissal onOpenChange={setDetails}>
+  <Sheet open={viewMode==='atlas'&&details&&selectedParts.length>0} modal={false} disablePointerDismissal onOpenChange={setDetails}>
    <SheetContent initialFocus={detailTitle} className={`detail-sheet glass ${state.isolate?'is-isolated':''}`} showCloseButton={true}>
     <div className="detail-header">
      <div className="detail-accent" style={{background:system?.color}}/>
@@ -1514,7 +1557,7 @@ export default function Home(){
    </SheetContent>
   </Sheet>
 
-  <Sheet open={about} onOpenChange={setAbout}>
+  <Sheet open={viewMode==='atlas'&&about} onOpenChange={setAbout}>
    <SheetContent className="about-sheet glass" showCloseButton={false}>
     <div className="about-sticky-header">
      <div className="about-header-top">
@@ -1554,5 +1597,31 @@ export default function Home(){
     </div>
    </SheetContent>
   </Sheet>
+
+  {/* Tebak Tebak Kata Game Container (Wireframe Section 10) */}
+  <div
+   className={`tebak-kata-container fixed inset-0 z-[120] flex items-center justify-center p-0 sm:p-4 sm:bg-black/80 sm:dark:bg-black/85 sm:backdrop-blur-md transition-opacity duration-200 ${
+    viewMode==='game'?'opacity-100 pointer-events-auto':'opacity-0 pointer-events-none'
+   }`}
+   style={{
+    backgroundColor: 'var(--bg-canvas, #faf7f2)',
+   }}
+   aria-hidden={viewMode!=='game'}
+  >
+   <div
+    className="relative w-full sm:max-w-md h-full sm:h-[94dvh] sm:rounded-3xl overflow-hidden shadow-2xl border-0 sm:border-2"
+    style={{
+      backgroundColor: 'var(--bg-canvas, #faf7f2)',
+      borderColor: 'var(--panel-border, rgba(0,0,0,0.18))',
+    }}
+   >
+    <GameApp
+     currentTheme={theme}
+     onToggleTheme={toggleTheme}
+     onOpenAtlas={handleOpenAtlasFromGame}
+     onCloseGame={()=>setViewMode('atlas')}
+    />
+   </div>
+  </div>
  </main>;
 }

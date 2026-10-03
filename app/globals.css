@@ -2599,3 +2599,291 @@ h1 .edition{font-family:inherit;font-weight:500;font-size:10px;letter-spacing:.0
 .dark .plain-scroller-slider-vertical [data-slot="slider-thumb"] {
   border-color: var(--panel-bg-solid, #1b1f25) !important;
 }
+
+/* Tebak Tebak Kata Game Animations & Utilities */
+@keyframes tebakShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+.animate-shake {
+  animation: tebakShake 0.4s ease-in-out;
+}
+
+@keyframes tebakFadeIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-fadeIn {
+  animation: tebakFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.game-launch-button {
+  background: var(--accent-primary, #b45309) !important;
+  color: #ffffff !important;
+  border-radius: 10px !important;
+  font-weight: 600 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  padding: 0 14px !important;
+  height: 42px !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14) !important;
+  transition: all 0.18s ease !important;
+}
+.game-launch-button:hover {
+  filter: brightness(1.08) !important;
+  transform: translateY(-1px) !important;
+}
+.game-launch-button:active {
+  transform: translateY(1px) !important;
+}
+
+/* When in game view mode, hide all atlas chrome, docks, panels, and headers */
+main[data-view-mode="game"] .mobile-side-dock,
+main[data-view-mode="game"] .mobile-bottom-sheet,
+main[data-view-mode="game"] .identity,
+main[data-view-mode="game"] .top-actions,
+main[data-view-mode="game"] .top-center-caption,
+main[data-view-mode="game"] .layers-panel,
+main[data-view-mode="game"] .bottom-dock,
+main[data-view-mode="game"] .view-controls,
+main[data-view-mode="game"] .corner-top-dock,
+main[data-view-mode="game"] .clean-ui-organ-tag,
+main[data-view-mode="game"] .studio-footer,
+main[data-view-mode="game"] .vignette,
+main[data-view-mode="game"] .model-tuner-panel,
+main[data-view-mode="game"] .search-panel,
+body:has([data-view-mode="game"]) .detail-sheet,
+body:has([data-view-mode="game"]) .about-sheet,
+body:has([data-view-mode="game"]) [data-slot=sheet-content] {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+main[data-view-mode="game"] .tebak-kata-container {
+  display: flex !important;
+  z-index: 1000 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+}
+
+/* ==========================================================================
+   Tebak Kata - Tactile Fake 3D Tile System (Brief Section 11)
+   Follows Theme Engine variables directly (Zero hardcoded brown/palette colors)
+   ========================================================================== */
+
+/* Tactile 3D Keycap Base - Sleek rectangular/chiclet keycaps with crisp 3.5px bottom bevel */
+.tebak-key-tile {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-style: solid !important;
+  border-width: 1px 1px 3.5px 1px !important;
+  border-radius: 5px !important;
+  font-weight: 700 !important;
+  user-select: none !important;
+  touch-action: manipulation !important;
+  transition: transform 0.06s ease, border-bottom-width 0.06s ease, background-color 0.12s ease !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 1.5px 3px rgba(0, 0, 0, 0.12) !important;
+}
+
+.tebak-key-tile:active {
+  transform: translateY(2px) !important;
+  border-bottom-width: 1.5px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 1px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Default Key - Light Mode */
+.tebak-key-tile.tile-default {
+  background-color: var(--panel-bg-solid, #ffffff) !important;
+  border-color: var(--panel-border, rgba(0, 0, 0, 0.14)) !important;
+  border-bottom-color: color-mix(in srgb, var(--panel-border, #9ca3af) 60%, black 40%) !important;
+  color: var(--panel-text, #0f172a) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 2px 3px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Default Key - Dark Mode (Elevated surface derived dynamically from current theme) */
+.dark .tebak-key-tile.tile-default,
+[data-theme="dark"] .tebak-key-tile.tile-default,
+main[data-theme-mode="dark"] .tebak-key-tile.tile-default,
+.theme-dark .tebak-key-tile.tile-default {
+  background-color: color-mix(in srgb, var(--panel-bg-solid, #10192a) 80%, white 20%) !important;
+  border-color: color-mix(in srgb, var(--panel-border, rgba(255, 255, 255, 0.2)) 70%, white 30%) !important;
+  border-bottom-color: color-mix(in srgb, var(--panel-bg-solid, #10192a) 40%, black 60%) !important;
+  color: var(--panel-text, #f0f6fc) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 4px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Right Status (Vibrant Green 3D Tile matching the reference) */
+.tebak-key-tile.tile-right,
+.tebak-slot-tile.tile-right {
+  background-color: #22c55e !important;
+  border-color: #4ade80 !important;
+  border-bottom-color: #15803d !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 4px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Close Status (Vibrant Yellow/Amber 3D Tile matching the reference) */
+.tebak-key-tile.tile-close,
+.tebak-slot-tile.tile-close {
+  background-color: #eab308 !important;
+  border-color: #fde047 !important;
+  border-bottom-color: #a16207 !important;
+  color: #1c1917 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 4px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Wrong Status (Muted Theme Surface 3D Tile matching the reference) */
+.tebak-key-tile.tile-wrong,
+.tebak-slot-tile.tile-wrong {
+  background-color: color-mix(in srgb, var(--panel-bg-solid, #10192a) 60%, white 40%) !important;
+  border-color: color-mix(in srgb, var(--panel-border, rgba(255, 255, 255, 0.2)) 50%, white 50%) !important;
+  border-bottom-color: color-mix(in srgb, var(--panel-bg-solid, #10192a) 35%, black 65%) !important;
+  color: var(--panel-text-muted, #94a3b8) !important;
+  opacity: 0.7 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1.5px 3px rgba(0, 0, 0, 0.18) !important;
+}
+
+/* Action Delete Key */
+.tebak-key-tile.tile-action-delete {
+  background-color: color-mix(in srgb, var(--panel-bg-solid, #ffffff) 88%, white 12%) !important;
+  border-color: var(--panel-border, rgba(0, 0, 0, 0.16)) !important;
+  border-bottom-color: color-mix(in srgb, var(--panel-border, #9ca3af) 60%, black 40%) !important;
+  color: var(--panel-text, #0f172a) !important;
+}
+.dark .tebak-key-tile.tile-action-delete,
+[data-theme="dark"] .tebak-key-tile.tile-action-delete {
+  background-color: color-mix(in srgb, var(--panel-bg-solid, #10192a) 75%, white 25%) !important;
+  border-color: color-mix(in srgb, var(--panel-border, rgba(255, 255, 255, 0.2)) 70%, white 30%) !important;
+  border-bottom-color: color-mix(in srgb, var(--panel-bg-solid, #10192a) 35%, black 65%) !important;
+  color: var(--panel-text, #f0f6fc) !important;
+}
+
+/* Action Enter Key (Theme Accent return button) */
+.tebak-key-tile.tile-action-enter {
+  background-color: var(--accent-primary, #0284c7) !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
+  border-bottom-color: color-mix(in srgb, var(--accent-primary, #0284c7) 45%, black 55%) !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* 3D Guess Slots (Wordle-style rows - crisp square tiles matching the reference) */
+.tebak-slot-tile {
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-style: solid !important;
+  border-width: 1.5px 1.5px 4px 1.5px !important;
+  border-radius: 5px !important;
+  font-weight: 800 !important;
+  user-select: none !important;
+  transition: all 0.1s ease !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1.5px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.tebak-slot-tile.slot-empty {
+  background-color: var(--panel-bg-solid, #ffffff) !important;
+  border-color: var(--panel-border, #e2e8f0) !important;
+  border-bottom-color: color-mix(in srgb, var(--panel-border, #cbd5e1) 60%, black 40%) !important;
+  color: var(--panel-text, #0f172a) !important;
+}
+.dark .tebak-slot-tile.slot-empty,
+[data-theme="dark"] .tebak-slot-tile.slot-empty {
+  background-color: color-mix(in srgb, var(--bg-canvas, #0c121d) 82%, white 18%) !important;
+  border-color: color-mix(in srgb, var(--panel-border, rgba(255,255,255,0.18)) 70%, white 30%) !important;
+  border-bottom-color: color-mix(in srgb, var(--bg-canvas, #0c121d) 35%, black 65%) !important;
+  color: var(--panel-text, #ffffff) !important;
+}
+
+.tebak-slot-tile.slot-active {
+  background-color: color-mix(in srgb, var(--accent-primary, #0284c7) 85%, white 15%) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  border-bottom-color: color-mix(in srgb, var(--accent-primary, #0284c7) 45%, black 55%) !important;
+  color: #ffffff !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* 3D Connector Platter Node */
+.tebak-node-tile {
+  position: absolute !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-style: solid !important;
+  border-width: 1.5px 1.5px 4px 1.5px !important;
+  border-radius: 12px !important;
+  font-weight: 800 !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  touch-action: manipulation !important;
+  transition: transform 0.06s ease, border-bottom-width 0.06s ease, background-color 0.12s ease !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 3px 6px rgba(0, 0, 0, 0.15) !important;
+}
+
+.tebak-node-tile:active {
+  transform: translateY(2px) !important;
+  border-bottom-width: 1.5px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+}
+
+.tebak-node-tile.node-default {
+  background-color: var(--panel-bg-solid, #ffffff) !important;
+  border-color: var(--panel-border, #d1d5db) !important;
+  border-bottom-color: color-mix(in srgb, var(--panel-border, #9ca3af) 60%, black 40%) !important;
+  color: var(--panel-text, #0f172a) !important;
+}
+.dark .tebak-node-tile.node-default,
+[data-theme="dark"] .tebak-node-tile.node-default {
+  background-color: color-mix(in srgb, var(--panel-bg-solid, #10192a) 80%, white 20%) !important;
+  border-color: color-mix(in srgb, var(--panel-border, rgba(255, 255, 255, 0.24)) 70%, white 30%) !important;
+  border-bottom-color: color-mix(in srgb, var(--panel-bg-solid, #10192a) 40%, black 60%) !important;
+  color: var(--panel-text, #f0f6fc) !important;
+}
+
+.tebak-node-tile.node-selected {
+  background-color: var(--accent-primary, #0284c7) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  border-bottom-color: color-mix(in srgb, var(--accent-primary, #0284c7) 45%, black 55%) !important;
+  color: #ffffff !important;
+}
+
+/* 3D Menu Cards */
+.tebak-card-tile {
+  position: relative !important;
+  border-style: solid !important;
+  border-width: 1.5px 1.5px 4px 1.5px !important;
+  border-radius: 12px !important;
+  transition: transform 0.06s ease, border-bottom-width 0.06s ease !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 3px 6px rgba(0, 0, 0, 0.1) !important;
+}
+
+.tebak-card-tile:active {
+  transform: translateY(2px) !important;
+  border-bottom-width: 1.5px !important;
+}
+
+.tebak-card-tile.card-default {
+  background-color: var(--panel-bg-solid, #ffffff) !important;
+  border-color: var(--panel-border, #e5e7eb) !important;
+  border-bottom-color: color-mix(in srgb, var(--panel-border, #9ca3af) 60%, black 40%) !important;
+  color: var(--panel-text, #0f172a) !important;
+}
+
+.dark .tebak-card-tile.card-default,
+[data-theme="dark"] .tebak-card-tile.card-default {
+  background-color: color-mix(in srgb, var(--panel-bg-solid, #10192a) 85%, white 15%) !important;
+  border-color: color-mix(in srgb, var(--panel-border, rgba(255, 255, 255, 0.2)) 70%, white 30%) !important;
+  border-bottom-color: color-mix(in srgb, var(--panel-bg-solid, #10192a) 40%, black 60%) !important;
+  color: var(--panel-text, #f0f6fc) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.5) !important;
+}
+
+
+
