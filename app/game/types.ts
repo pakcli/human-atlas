@@ -30,12 +30,15 @@ export interface GameSettings {
   colorBlindMarkers: boolean;
   readAloud: boolean;
   autoClearOnWrong: boolean;
+  letterSuspense?: boolean;
 }
 
 export interface GameStats {
   roundsPlayed: number;
   wordsWon: number;
   totalScore: number;
+  currentStreak?: number;
+  bestStreak?: number;
   history: {
     word: string;
     level: GameLevel;

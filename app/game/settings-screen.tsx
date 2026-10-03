@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import type { GameSettings } from './types';
 import { THEME_OPTIONS, type AccentThemeId } from '../theme-engine';
-import { ChevronLeft, Volume2, VolumeX, Smartphone, Sun, Moon, Type, Eye, Trash2, Check, RotateCcw } from 'lucide-react';
+import { ChevronLeft, Volume2, VolumeX, Smartphone, Sun, Moon, Type, Eye, Trash2, Check, RotateCcw, Sparkles } from 'lucide-react';
 
 interface SettingsScreenProps {
   settings: GameSettings;
@@ -245,6 +245,31 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               }`}
             >
               {settings.autoClearOnWrong !== false ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
+          {/* Letter checking suspense animation */}
+          <div className="flex items-center justify-between py-2.5">
+            <div className="flex items-center gap-2.5">
+              <Sparkles size={18} style={{ color: 'var(--accent-primary, #0284c7)' }} />
+              <div>
+                <div className="text-xs font-semibold">
+                  Animasi Periksa Huruf
+                </div>
+                <div className="text-[10px] opacity-60">
+                  Periksa huruf satu per satu L1→L5 (suspense)
+                </div>
+              </div>
+            </div>
+            <button
+              type="button"
+              data-slot="button"
+              onClick={() => onUpdateSettings({ letterSuspense: settings.letterSuspense === false ? true : false })}
+              className={`tebak-key-tile min-w-[56px] py-1.5 px-3 text-xs tracking-wider ${
+                settings.letterSuspense !== false ? 'tile-action-enter' : 'tile-default opacity-50'
+              }`}
+            >
+              {settings.letterSuspense !== false ? 'ON' : 'OFF'}
             </button>
           </div>
 

@@ -532,6 +532,8 @@ Menu
 | Tema | Light (cream) or Dark (brown, matches the atlas) | Light |
 | Huruf besar | Bigger letters | OFF |
 | Penanda warna | ✓ and dot marks on tiles for color-blind players | ON |
+| Periksa huruf per huruf | Sequential checking suspense animation (L1→L2→L3...) with flip & tick | ON |
+| Hapus otomatis saat salah | Bersihkan draft jawaban jika salah tebak | ON |
 | Bacakan soal | Read the question aloud (for TK) | Later |
 | Hapus data main | Delete play history on this device | Button |
 
@@ -567,6 +569,12 @@ Menu
 - There is **no game over** here (unlimited guesses).
 - The 3D area can be **folded** so the guess rows are not covered.
 - The newest guess row is big. Old rows scroll away.
+
+**Sequential Staggered Checking Animation ($L_1 \to L_2 \to L_3 \dots$)**
+- When the player taps **Enter** on a completed word, the guess row is evaluated letter-by-letter from left to right with a 220ms–260ms stagger per tile.
+- Each tile executes a 3D flip transition (`rotateX`), plays a reveal tick sound and haptic pulse, and reveals its status (vibrant green for exact match, dark/hazard-striped for wrong).
+- Keyboard input and actions are temporarily locked during evaluation to maintain suspense and prevent desync.
+- Controlled via `letterSuspense: true` setting (toggleable in Settings, enabled by default). When disabled, evaluation resolves instantaneously across all tiles.
 
 ### 10.7 Page 5: Game, Tebak Sambung (swipe to connect)
 
@@ -683,6 +691,37 @@ Menu
 │ [ Lihat di atlas >> ]  [ Lanjut → ]  │
 └──────────────────────────────────────┘
 ```
+
+**Wordle Win Recap Popup (Victory Screen & Streak Summary)**
+
+Triggered immediately upon submitting the winning word in Tebak Ketik (matching the livestream Wordle victory recap reference):
+
+```
+┌─────────── FRIVTASTIC! ───────────┐
+│           FANTASTIS!              │
+├───────────────────────────────────┤
+│        [ ][ ][🟨][ ][ ]           │  ← Attempt 1 (yellow/gray)
+│        [ ][ ][🟩][🟩][🟩]         │  ← Attempt 2 (partially green)
+│        [🟩][🟩][🟩][🟩][🟩]       │  ← Attempt 3 (solved!)
+│        [ ][ ][ ][ ][ ]            │  ← Blank row 4
+│        [ ][ ][ ][ ][ ]            │  ← Blank row 5
+│        [ ][ ][ ][ ][ ]            │  ← Blank row 6
+├───────────────────────────────────┤
+│        CURRENT STREAK: 98         │
+│         BEST STREAK: 98           │
+├───────────────────────────────────┤
+│    [ ⌂ Menu ]      [ ↻ Lanjut ]   │
+│         [ Lihat di Atlas >> ]     │
+└───────────────────────────────────┘
+```
+
+- **Celebration Headline**: Dynamic bold header ("FANTASTIS!", "SEMPURNA!", "LUAR BIASA!").
+- **Grid Matrix**: 6-row Wordle chiclet matrix visualizing the attempt history of the round with color-coded tiles (green = correct, yellow = wrong spot, dark/hazard = wrong letter, empty white = remaining attempts).
+- **Streak Counters**: Displays `CURRENT STREAK` (consecutive winning rounds) and `BEST STREAK` (all-time high record), persisted in `localStorage` under `tebak_kata_stats`.
+- **Navigation Controls**:
+  - `[ ⌂ ]` (Home button) -> Returns cleanly to the game menu.
+  - `[ ↻ ]` (Next/Replay button) -> Advances directly to the next word round.
+  - `[ Lihat di Atlas >> ]` -> Switches camera directly to the 3D organ in Human Atlas for contextual learning.
 
 **Atlas while playing**
 
@@ -1133,6 +1172,9 @@ Named enzymes (AMILASE, LIPASE) are **not** in SD. ENZIM and LIUR set the "SD up
 | 36 | Connector line layering | Platter SVG connecting lines set to `z-0` and node letter tiles elevated to `z-10` (`z-20` when selected) so connector lines run strictly behind tile surfaces and never obscure letters or badges |
 | 37 | Wrong letter hazard stripes & direct draft removal | Added subtle "garis polisi" (diagonal hazard `//` stripes) with grayout to `tile-wrong` surfaces on keyboard and guess grid; enabled tapping directly on any filled letter slot in the guessing word draft to immediately remove that specific letter |
 | 38 | Directional arrowheads (`-->`) | Added sleek SVG directional arrowheads along connecting lines between connected nodes (positioned cleanly at midpoint) and at the drag pointer tip pointing towards swipe direction |
+| 39 | Theme accent engine in dark mode | Fixed dark mode switch styling to use dynamic `var(--accent-primary)` and chiclet keycap bevels; added real-time 6-color accent palette selector (`THEME_OPTIONS`) directly in Game Settings |
+| 40 | Sequential staggered letter checking | Added left-to-right evaluation suspense animation ($L_1 \to L_2 \to L_3 \dots$) with 240ms stagger, audio/haptic pulse per tile, and toggleable `letterSuspense: true` default setting |
+| 41 | Wordle win recap victory popup | Added full-screen/modal victory recap matching the livestream reference with dynamic congratulatory title ("FANTASTIS!"), 6-row attempt history chiclet grid, `CURRENT STREAK` & `BEST STREAK` counters, and Home/Replay navigation |
 
 
 ### 17.2 Open questions

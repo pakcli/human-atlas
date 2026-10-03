@@ -10,7 +10,9 @@ import { ExitModal } from './exit-modal';
 import { AboutScreen } from './about-screen';
 import { SettingsScreen } from './settings-screen';
 import { RadialAlphabetBackground } from './radial-alphabet-background';
+import { WordleVictoryModal } from './wordle-victory-modal';
 import type { AccentThemeId } from '../theme-engine';
+import type { GuessEvaluation, GameStats } from './types';
 
 interface GameAppProps {
   currentTheme: 'light' | 'dark';
@@ -29,6 +31,7 @@ const DEFAULT_SETTINGS: GameSettings = {
   colorBlindMarkers: true,
   readAloud: false,
   autoClearOnWrong: true,
+  letterSuspense: true,
 };
 
 export const GameApp: React.FC<GameAppProps> = ({
@@ -53,11 +56,25 @@ export const GameApp: React.FC<GameAppProps> = ({
   const [showPause, setShowPause] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [showVictory, setShowVictory] = useState(false);
+  const [victoryGuesses, setVictoryGuesses] = useState<GuessEvaluation[]>([]);
   const [lastRoundResult, setLastRoundResult] = useState<{
     isWin: boolean;
     score?: number;
     wrongCount?: number;
   }>({ isWin: false });
+
+  // Stats state (loads from localStorage)
+  const [stats, setStats] = useState<GameStats>(() => {
+    if (typeof window === 'undefined') {
+      return { roundsPlayed: 0, wordsWon: 0, totalScore: 0, currentStreak: 0, bestStreak: 0, history: [] };
+    }
+    try {
+      const saved = localStorage.getItem('tebak_kata_stats');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { roundsPlayed: 0, wordsWon: 0, totalScore: 0, currentStreak: 0, bestStreak: 0, history: [] };
+  });
 
   // Settings state (loads from localStorage)
   const [settings, setSettings] = useState<GameSettings>(() => {
@@ -97,6 +114,7 @@ export const GameApp: React.FC<GameAppProps> = ({
       localStorage.removeItem('tebak_kata_stats');
       localStorage.removeItem('tebak_kata_settings');
     }
+    setStats({ roundsPlayed: 0, wordsWon: 0, totalScore: 0, currentStreak: 0, bestStreak: 0, history: [] });
   };
 
   // Level selector
@@ -110,22 +128,55 @@ export const GameApp: React.FC<GameAppProps> = ({
     setMode(selectedMode);
     setScreen(selectedMode);
     setShowExplanation(false);
+    setShowVictory(false);
   };
 
   // Handle win in Word Connect (Swipe mode)
   const handleConnectSuccess = () => {
+    const curStreak = (stats.currentStreak || 0) + 1;
+    const bestStr = Math.max(stats.bestStreak || 0, curStreak);
+    const updatedStats: GameStats = {
+      ...stats,
+      roundsPlayed: stats.roundsPlayed + 1,
+      wordsWon: stats.wordsWon + 1,
+      totalScore: stats.totalScore + 10,
+      currentStreak: curStreak,
+      bestStreak: bestStr,
+    };
+    setStats(updatedStats);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tebak_kata_stats', JSON.stringify(updatedStats));
+    }
+
     setLastRoundResult({ isWin: true });
     setShowExplanation(true);
   };
 
-  // Handle win in Word Typing (Typing mode)
-  const handleTypingSuccess = (finalScore: number, wrongCount: number) => {
+  // Handle win in Word Typing (Typing mode) - triggers Wordle Victory Recap Popup
+  const handleTypingSuccess = (finalScore: number, wrongCount: number, evaluations?: GuessEvaluation[]) => {
+    const curStreak = (stats.currentStreak || 0) + 1;
+    const bestStr = Math.max(stats.bestStreak || 0, curStreak);
+    const updatedStats: GameStats = {
+      ...stats,
+      roundsPlayed: stats.roundsPlayed + 1,
+      wordsWon: stats.wordsWon + 1,
+      totalScore: stats.totalScore + finalScore,
+      currentStreak: curStreak,
+      bestStreak: bestStr,
+    };
+    setStats(updatedStats);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('tebak_kata_stats', JSON.stringify(updatedStats));
+    }
+
     setLastRoundResult({ isWin: true, score: finalScore, wrongCount });
-    setShowExplanation(true);
+    setVictoryGuesses(evaluations || []);
+    setShowVictory(true);
   };
 
   // Next word
   const handleNextWord = () => {
+    setShowVictory(false);
     setShowExplanation(false);
     setWordIndex((prev) => prev + 1);
   };
@@ -193,6 +244,21 @@ export const GameApp: React.FC<GameAppProps> = ({
           onBack={() => setScreen('menu')}
         />
       )}
+
+      {/* Wordle Victory Recap Modal (Section 10.8 & screenshot reference) */}
+      <WordleVictoryModal
+        isOpen={showVictory}
+        word={currentWord}
+        guesses={victoryGuesses}
+        currentStreak={stats.currentStreak || 0}
+        bestStreak={stats.bestStreak || 0}
+        onNext={handleNextWord}
+        onHome={() => {
+          setShowVictory(false);
+          setScreen('menu');
+        }}
+        onViewInAtlas={handleViewInAtlas}
+      />
 
       {/* Explanation Card Modal (Section 10.8) */}
       {showExplanation && (

@@ -7,11 +7,10 @@ import { Pause, Delete, CornerDownLeft, Sparkles, Box } from 'lucide-react';
 interface WordTypingGameProps {
   word: WordItem;
   settings: GameSettings;
-  onSuccess: (finalScore: number, wrongCount: number) => void;
+  onSuccess: (finalScore: number, wrongCount: number, evaluations?: GuessEvaluation[]) => void;
   onOpenPause: () => void;
   onOpenAtlas: (targetName?: string) => void;
 }
-
 
 export const WordTypingGame: React.FC<WordTypingGameProps> = ({
   word,
@@ -28,6 +27,20 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
   const [revealedIndices, setRevealedIndices] = useState<number[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState('Ketik tebakanmu, lalu tekan Enter');
   const [isShakeActive, setIsShakeActive] = useState(false);
+
+  // Sequential suspense checking state (L1 -> L2 -> L3...)
+  const [isChecking, setIsChecking] = useState(false);
+  const [checkingGuess, setCheckingGuess] = useState<string | null>(null);
+  const [revealedCheckCol, setRevealedCheckCol] = useState(-1);
+  const [checkingEval, setCheckingEval] = useState<GuessEvaluation | null>(null);
+  const checkTimersRef = useRef<NodeJS.Timeout[]>([]);
+
+  // Cleanup checking timers on unmount
+  useEffect(() => {
+    return () => {
+      checkTimersRef.current.forEach(clearTimeout);
+    };
+  }, []);
 
   const wrongCount = guesses.length;
   const currentScore = computeFinalScore(wrongCount, revealedIndices.length);
@@ -47,6 +60,7 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
 
   // Handle letter input
   const handleAddChar = (char: string) => {
+    if (isChecking) return;
     if (currentGuess.length < wordLength) {
       soundManager.playTap(settings.sound);
       soundManager.vibrate(settings.vibration, 15);
@@ -55,11 +69,13 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
   };
 
   const handleBackspace = () => {
+    if (isChecking) return;
     soundManager.playTap(settings.sound);
     setCurrentGuess((prev) => prev.slice(0, -1));
   };
 
   const handleSubmit = () => {
+    if (isChecking) return;
     if (currentGuess.length !== wordLength) {
       soundManager.playWrong(settings.sound);
       setFeedbackMessage(`Panjang kata harus ${wordLength} huruf!`);
@@ -69,28 +85,78 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
     }
 
     const evaluation = evaluateGuess(currentGuess, targetWord);
-    const nextGuesses = [...guesses, evaluation];
-    setGuesses(nextGuesses);
-    setFeedbackMessage(evaluation.message);
 
-    if (evaluation.rightCount === wordLength) {
-      // Won!
-      soundManager.playWin(settings.sound);
-      soundManager.vibrate(settings.vibration, [50, 70, 100]);
-      const finalScore = computeFinalScore(guesses.length, revealedIndices.length);
-      onSuccess(finalScore, guesses.length);
-    } else {
-      // Wrong guess
-      soundManager.playWrong(settings.sound);
-      soundManager.vibrate(settings.vibration, 30);
-      if (settings.autoClearOnWrong !== false) {
-        setCurrentGuess('');
+    // Instant check if letter suspense animation is disabled
+    if (settings.letterSuspense === false) {
+      const nextGuesses = [...guesses, evaluation];
+      setGuesses(nextGuesses);
+      setFeedbackMessage(evaluation.message);
+
+      if (evaluation.rightCount === wordLength) {
+        soundManager.playWin(settings.sound);
+        soundManager.vibrate(settings.vibration, [50, 70, 100]);
+        const finalScore = computeFinalScore(guesses.length, revealedIndices.length);
+        onSuccess(finalScore, guesses.length, nextGuesses);
+      } else {
+        soundManager.playWrong(settings.sound);
+        soundManager.vibrate(settings.vibration, 30);
+        if (settings.autoClearOnWrong !== false) {
+          setCurrentGuess('');
+        }
       }
+      return;
     }
+
+    // Sequential checking suspense animation (L1 -> L2 -> L3...)
+    setIsChecking(true);
+    setCheckingGuess(currentGuess);
+    setCheckingEval(evaluation);
+    setRevealedCheckCol(-1);
+    setFeedbackMessage('Memeriksa tebakan...');
+
+    checkTimersRef.current.forEach(clearTimeout);
+    checkTimersRef.current = [];
+
+    const staggerMs = 240;
+    for (let c = 0; c < wordLength; c++) {
+      const timer = setTimeout(() => {
+        setRevealedCheckCol(c);
+        soundManager.playTap(settings.sound);
+        soundManager.vibrate(settings.vibration, 18);
+      }, (c + 1) * staggerMs);
+      checkTimersRef.current.push(timer);
+    }
+
+    const finalTimer = setTimeout(() => {
+      const nextGuesses = [...guesses, evaluation];
+      setGuesses(nextGuesses);
+      setFeedbackMessage(evaluation.message);
+      setIsChecking(false);
+      setCheckingGuess(null);
+      setCheckingEval(null);
+      setRevealedCheckCol(-1);
+
+      if (evaluation.rightCount === wordLength) {
+        soundManager.playWin(settings.sound);
+        soundManager.vibrate(settings.vibration, [50, 70, 100]);
+        const finalScore = computeFinalScore(guesses.length, revealedIndices.length);
+        onSuccess(finalScore, guesses.length, nextGuesses);
+      } else {
+        soundManager.playWrong(settings.sound);
+        soundManager.vibrate(settings.vibration, 30);
+        setIsShakeActive(true);
+        setTimeout(() => setIsShakeActive(false), 500);
+        if (settings.autoClearOnWrong !== false) {
+          setCurrentGuess('');
+        }
+      }
+    }, wordLength * staggerMs + 140);
+    checkTimersRef.current.push(finalTimer);
   };
 
   // Remove specific letter from guessing word draft when user presses on its slot
   const handleRemoveDraftChar = (colIdx: number) => {
+    if (isChecking) return;
     if (colIdx < currentGuess.length) {
       soundManager.playTap(settings.sound);
       soundManager.vibrate(settings.vibration, 15);
@@ -99,7 +165,7 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
   };
 
   // Powerup: Reveal a letter (costs 2 score points)
-  const canReveal = currentScore > 2 && revealedIndices.length < Math.floor(wordLength / 2);
+  const canReveal = !isChecking && currentScore > 2 && revealedIndices.length < Math.floor(wordLength / 2);
 
   const handleRevealLetter = () => {
     if (!canReveal) return;
@@ -122,6 +188,7 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
   // Physical keyboard listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (isChecking) return;
       if (e.ctrlKey || e.altKey || e.metaKey) return;
       const key = e.key.toUpperCase();
       if (/^[A-Z]$/.test(key)) {
@@ -272,15 +339,43 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
           </div>
         ))}
 
-        {/* Current Active Input Row (Tapping a letter removes it from the draft) */}
+        {/* Current Active Input Row / Checking Suspense Row */}
         <div className={`flex gap-1.5 ${isShakeActive ? 'animate-shake' : ''}`}>
           {Array.from({ length: wordLength }).map((_, colIdx) => {
+            if (isChecking && checkingGuess && checkingEval) {
+              const char = checkingGuess[colIdx] || '';
+              const isRevealed = colIdx <= revealedCheckCol;
+              const isRight = checkingEval.statuses[colIdx] === 'right';
+
+              let tileClass = 'slot-active';
+              if (isRevealed) {
+                tileClass = `${isRight ? 'tile-right' : 'tile-wrong'} animate-tile-flip`;
+              }
+
+              return (
+                <div
+                  key={colIdx}
+                  className={`tebak-slot-tile w-10 h-10 sm:w-11 sm:h-11 ${tileClass} ${
+                    settings.largeText ? 'text-xl' : 'text-lg'
+                  }`}
+                >
+                  {char}
+                  {isRevealed && settings.colorBlindMarkers && (
+                    <span className="absolute top-0.5 right-0.5 text-[9px] font-black opacity-70">
+                      {isRight ? '✓' : '·'}
+                    </span>
+                  )}
+                </div>
+              );
+            }
+
             const char = currentGuess[colIdx] || '';
             const isRevealedHint = revealedIndices.includes(colIdx) && !char;
             return (
               <button
                 key={colIdx}
                 type="button"
+                data-slot="button"
                 onClick={() => handleRemoveDraftChar(colIdx)}
                 title={char ? `Hapus huruf ${char}` : undefined}
                 className={`tebak-slot-tile w-10 h-10 sm:w-11 sm:h-11 ${
@@ -322,6 +417,7 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
         <div className="flex justify-between items-center px-1 mb-1.5">
           <button
             type="button"
+            data-slot="button"
             onClick={handleRevealLetter}
             disabled={!canReveal}
             className="tebak-key-tile tile-default py-1 px-2.5 text-[11px] sm:text-xs flex items-center gap-1.5 disabled:opacity-40"
@@ -349,6 +445,8 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
                 <button
                   key={k}
                   type="button"
+                  data-slot="button"
+                  disabled={isChecking}
                   onClick={() => handleAddChar(k)}
                   className={`tebak-key-tile ${statusClass} flex-1 min-w-[24px] sm:min-w-[28px] h-10 sm:h-11 text-xs sm:text-sm`}
                 >
@@ -370,6 +468,8 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
                 <button
                   key={k}
                   type="button"
+                  data-slot="button"
+                  disabled={isChecking}
                   onClick={() => handleAddChar(k)}
                   className={`tebak-key-tile ${statusClass} flex-1 min-w-[24px] sm:min-w-[28px] h-10 sm:h-11 text-xs sm:text-sm`}
                 >
@@ -391,6 +491,8 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
                 <button
                   key={k}
                   type="button"
+                  data-slot="button"
+                  disabled={isChecking}
                   onClick={() => handleAddChar(k)}
                   className={`tebak-key-tile ${statusClass} flex-1 min-w-[24px] sm:min-w-[28px] h-10 sm:h-11 text-xs sm:text-sm`}
                 >
@@ -402,8 +504,10 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
             {/* Backspace Button */}
             <button
               type="button"
+              data-slot="button"
+              disabled={isChecking}
               onClick={handleBackspace}
-              className="tebak-key-tile tile-action-delete flex-[1.3] min-w-[32px] sm:min-w-[36px] h-10 sm:h-11 flex items-center justify-center"
+              className="tebak-key-tile tile-action-delete flex-[1.3] min-w-[32px] sm:min-w-[36px] h-10 sm:h-11 flex items-center justify-center disabled:opacity-40"
               title="Hapus"
             >
               <Delete size={17} />
@@ -412,8 +516,9 @@ export const WordTypingGame: React.FC<WordTypingGameProps> = ({
             {/* Enter Button */}
             <button
               type="button"
+              data-slot="button"
               onClick={handleSubmit}
-              disabled={currentGuess.length !== wordLength}
+              disabled={isChecking || currentGuess.length !== wordLength}
               className="tebak-key-tile tile-action-enter flex-[1.4] min-w-[36px] sm:min-w-[42px] h-10 sm:h-11 flex items-center justify-center disabled:opacity-40"
               title="Enter"
             >

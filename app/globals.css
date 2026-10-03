@@ -2912,5 +2912,25 @@ main[data-theme-mode="dark"] .tebak-key-tile.tile-default,
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 12px rgba(0, 0, 0, 0.5) !important;
 }
 
+/* Wordle Letter Checking Suspense 3D Flip Animation */
+@keyframes tileFlip {
+  0% {
+    transform: rotateX(0deg);
+  }
+  45% {
+    transform: rotateX(90deg);
+  }
+  55% {
+    transform: rotateX(90deg);
+  }
+  100% {
+    transform: rotateX(0deg);
+  }
+}
+
+.animate-tile-flip {
+  animation: tileFlip 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+}
+
 
 
